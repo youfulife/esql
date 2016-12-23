@@ -1,0 +1,19 @@
+{
+    "debug": true,
+
+    "http": {
+        "enabled": true,
+        "listen": "0.0.0.0:1234"
+    },
+
+    "es": {
+        "enabled": true,
+        "indexPrefix": "ys",
+        "indexSuffix": "2006.01.02"
+    },
+    
+    "redis": {
+        "enabled": true,
+        "server": "127.0.0.1:3306"
+    }
+}
