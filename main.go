@@ -6,6 +6,7 @@ import (
 	"os"
 	"runtime"
 
+	"github.com/bitly/go-simplejson"
 	"github.com/chenyoufu/esql/g"
 	"github.com/chenyoufu/esql/sp"
 )
@@ -25,7 +26,14 @@ func main() {
 	g.ParseConfig(*cfg)
 	fmt.Println(g.Config())
 
-	sql := `select mysql_over_time, sum(mysql.bytes_in) / sum(mysql.bytes_in+mysql.bytes_out) AS in_bytes_rate, COUNT(*) AS ipo_count from "cc-packetbeat-4a859fff6e5c4521aab187eee1cfceb8-2016.12.22" where type='mysql' GROUP BY date_histogram('@timestamp', '1h') AS mysql_over_time`
+	sql := `select mysql_over_time,
+			sum(mysql.bytes_in) / sum(mysql.bytes_in+mysql.bytes_out) AS in_bytes_rate,
+			COUNT(*) AS ipo_count
+			FROM "cc-packetbeat-4a859fff6e5c4521aab187eee1cfceb8-2016.12.22"
+			WHERE xxx.yy.type='mysql' AND yyy.zz > 1 AND xxx.zz != '123'
+			GROUP BY date_histogram('@timestamp', '1h') AS mysql_over_time`
+
+	sql = `SELECT * FROM symbol ORDER BY xxx ASC, yyy DESC LIMIT 1`
 	stmt, err := sp.ParseStatement(sql)
 	if err != nil {
 		panic(err)
@@ -35,5 +43,11 @@ func main() {
 		panic("Not support stmt")
 	}
 	fmt.Println(selectStmt)
+	fmt.Println(selectStmt.QueryFilter())
+	fmt.Println(selectStmt.QuerySort())
+
+	js := simplejson.New()
+	js.Set("xx", "yy")
+	fmt.Println(js)
 
 }

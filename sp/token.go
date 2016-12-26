@@ -268,7 +268,16 @@ func init() {
 // String returns the string representation of the token.
 func (tok Token) String() string {
 	if tok >= 0 && tok < Token(len(tokens)) {
-		return tokens[tok]
+		switch tok {
+		case AND:
+			return "&&"
+		case OR:
+			return "||"
+		case EQ:
+			return "=="
+		default:
+			return tokens[tok]
+		}
 	}
 	return ""
 }
