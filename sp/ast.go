@@ -1339,7 +1339,7 @@ func (s *SelectStatement) validate(tr targetRequirement) error {
 		return err
 	}
 
-	if err := s.validateAggregates(tr); err != nil {
+	if err := s.validateAggregates(); err != nil {
 		return err
 	}
 
@@ -1364,36 +1364,15 @@ func (s *SelectStatement) validateFields() error {
 }
 
 func (s *SelectStatement) validateDimensions() error {
-	var dur time.Duration
 	for _, dim := range s.Dimensions {
 		switch expr := dim.Expr.(type) {
 		case *Call:
 			// Ensure the call is time() and it has one or two duration arguments.
 			// If we already have a duration
-			if expr.Name != "time" {
+			if expr.Name != "date_histogram" && expr.Name != "histogram" {
 				return errors.New("only time() calls allowed in dimensions")
-			} else if got := len(expr.Args); got < 1 || got > 2 {
-				return errors.New("time dimension expected 1 or 2 arguments")
-			} else if lit, ok := expr.Args[0].(*DurationLiteral); !ok {
-				return errors.New("time dimension must have duration argument")
-			} else if dur != 0 {
-				return errors.New("multiple time dimensions not allowed")
-			} else {
-				dur = lit.Val
-				if len(expr.Args) == 2 {
-					switch lit := expr.Args[1].(type) {
-					case *DurationLiteral:
-						// noop
-					case *Call:
-						if lit.Name != "now" {
-							return errors.New("time dimension offset function must be now()")
-						} else if len(lit.Args) != 0 {
-							return errors.New("time dimension offset now() function requires no arguments")
-						}
-					default:
-						return errors.New("time dimension offset must be duration or now()")
-					}
-				}
+			} else if got := len(expr.Args); got < 2 {
+				return errors.New("time dimension expected 2 or more arguments")
 			}
 		case *VarRef:
 			if strings.ToLower(expr.Val) == "time" {
@@ -1424,31 +1403,6 @@ func (s *SelectStatement) validSelectWithAggregate() error {
 		if len(fieldCalls) != 0 {
 			numAggregates++
 		}
-	}
-	// For TOP, BOTTOM, MAX, MIN, FIRST, LAST, PERCENTILE (selector functions) it is ok to ask for fields and tags
-	// but only if one function is specified.  Combining multiple functions and fields and tags is not currently supported
-	onlySelectors := true
-	for k := range calls {
-		switch k {
-		case "top", "bottom", "max", "min", "first", "last", "percentile", "sample":
-		default:
-			onlySelectors = false
-			break
-		}
-	}
-	if onlySelectors {
-		// If they only have one selector, they can have as many fields or tags as they want
-		if numAggregates == 1 {
-			return nil
-		}
-		// If they have multiple selectors, they are not allowed to have any other fields or tags specified
-		if numAggregates > 1 && len(s.Fields) != numAggregates {
-			return fmt.Errorf("mixing multiple selector functions with tags or fields is not supported")
-		}
-	}
-
-	if numAggregates != 0 && numAggregates != len(s.Fields) {
-		return fmt.Errorf("mixing aggregate and non-aggregate queries is not supported")
 	}
 	return nil
 }
@@ -1525,172 +1479,39 @@ func (s *SelectStatement) validSampleAggr(expr *Call) error {
 	}
 }
 
-func (s *SelectStatement) validateAggregates(tr targetRequirement) error {
+func (e *BinaryExpr) validateArgs() error {
+	v := binaryExprValidator{}
+	Walk(&v, e)
+	if v.err != nil {
+		return v.err
+	} else if v.calls {
+		return errors.New("argument binary expressions cannot mix function")
+	} else if !v.refs {
+		return errors.New("argument binary expressions at least one key")
+	}
+	return nil
+}
+
+func (s *SelectStatement) validateAggregates() error {
 	for _, f := range s.Fields {
 		for _, expr := range walkFunctionCalls(f.Expr) {
-			switch expr.Name {
-			case "derivative", "non_negative_derivative", "difference", "moving_average", "cumulative_sum", "elapsed":
-				if err := s.validSelectWithAggregate(); err != nil {
-					return err
-				}
-				switch expr.Name {
-				case "derivative", "non_negative_derivative", "elapsed":
-					if min, max, got := 1, 2, len(expr.Args); got > max || got < min {
-						return fmt.Errorf("invalid number of arguments for %s, expected at least %d but no more than %d, got %d", expr.Name, min, max, got)
-					}
-					// If a duration arg is passed, make sure it's a duration
-					if len(expr.Args) == 2 {
-						// Second must be a duration .e.g (1h)
-						if _, ok := expr.Args[1].(*DurationLiteral); !ok {
-							return fmt.Errorf("second argument to %s must be a duration, got %T", expr.Name, expr.Args[1])
-						}
-					}
-				case "difference", "cumulative_sum":
-					if got := len(expr.Args); got != 1 {
-						return fmt.Errorf("invalid number of arguments for %s, expected 1, got %d", expr.Name, got)
-					}
-				case "moving_average":
-					if got := len(expr.Args); got != 2 {
-						return fmt.Errorf("invalid number of arguments for moving_average, expected 2, got %d", got)
-					}
-
-					if lit, ok := expr.Args[1].(*IntegerLiteral); !ok {
-						return fmt.Errorf("second argument for moving_average must be an integer, got %T", expr.Args[1])
-					} else if lit.Val <= 1 {
-						return fmt.Errorf("moving_average window must be greater than 1, got %d", lit.Val)
-					} else if int64(int(lit.Val)) != lit.Val {
-						return fmt.Errorf("moving_average window too large, got %d", lit.Val)
-					}
-				}
-				// Validate that if they have grouping by time, they need a sub-call like min/max, etc.
-				groupByInterval, err := s.GroupByInterval()
-				if err != nil {
-					return fmt.Errorf("invalid group interval: %v", err)
-				}
-
-				if c, ok := expr.Args[0].(*Call); ok && groupByInterval == 0 {
-					return fmt.Errorf("%s aggregate requires a GROUP BY interval", expr.Name)
-				} else if !ok && groupByInterval > 0 {
-					return fmt.Errorf("aggregate function required inside the call to %s", expr.Name)
-				} else if ok {
-					switch c.Name {
-					case "top", "bottom":
-						if err := s.validTopBottomAggr(c); err != nil {
-							return err
-						}
-					case "percentile":
-						if err := s.validPercentileAggr(c); err != nil {
-							return err
-						}
-					default:
-						if exp, got := 1, len(c.Args); got != exp {
-							return fmt.Errorf("invalid number of arguments for %s, expected %d, got %d", c.Name, exp, got)
-						}
-
-						switch fc := c.Args[0].(type) {
-						case *VarRef, *Wildcard, *RegexLiteral:
-							// do nothing
-						case *Call:
-							if fc.Name != "distinct" || expr.Name != "count" {
-								return fmt.Errorf("expected field argument in %s()", c.Name)
-							} else if exp, got := 1, len(fc.Args); got != exp {
-								return fmt.Errorf("count(distinct %s) can only have %d argument(s), got %d", fc.Name, exp, got)
-							} else if _, ok := fc.Args[0].(*VarRef); !ok {
-								return fmt.Errorf("expected field argument in distinct()")
-							}
-						case *Distinct:
-							if expr.Name != "count" {
-								return fmt.Errorf("expected field argument in %s()", c.Name)
-							}
-						default:
-							return fmt.Errorf("expected field argument in %s()", c.Name)
-						}
-					}
-				}
-			case "top", "bottom":
-				if err := s.validTopBottomAggr(expr); err != nil {
-					return err
-				}
-			case "percentile":
-				if err := s.validPercentileAggr(expr); err != nil {
-					return err
-				}
-			case "sample":
-				if err := s.validSampleAggr(expr); err != nil {
-					return err
-				}
-			case "holt_winters", "holt_winters_with_fit":
-				if exp, got := 3, len(expr.Args); got != exp {
-					return fmt.Errorf("invalid number of arguments for %s, expected %d, got %d", expr.Name, exp, got)
-				}
-				// Validate that if they have grouping by time, they need a sub-call like min/max, etc.
-				groupByInterval, err := s.GroupByInterval()
-				if err != nil {
-					return fmt.Errorf("invalid group interval: %v", err)
-				}
-
-				if _, ok := expr.Args[0].(*Call); ok && groupByInterval == 0 {
-					return fmt.Errorf("%s aggregate requires a GROUP BY interval", expr.Name)
-				} else if !ok {
-					return fmt.Errorf("must use aggregate function with %s", expr.Name)
-				}
-				if arg, ok := expr.Args[1].(*IntegerLiteral); !ok {
-					return fmt.Errorf("expected integer argument as second arg in %s", expr.Name)
-				} else if arg.Val <= 0 {
-					return fmt.Errorf("second arg to %s must be greater than 0, got %d", expr.Name, arg.Val)
-				}
-				if _, ok := expr.Args[2].(*IntegerLiteral); !ok {
-					return fmt.Errorf("expected integer argument as third arg in %s", expr.Name)
-				}
-			default:
-				if err := s.validSelectWithAggregate(); err != nil {
-					return err
-				}
-				if exp, got := 1, len(expr.Args); got != exp {
-					// Special error message if distinct was used as the argument.
-					if expr.Name == "count" && got >= 1 {
-						if _, ok := expr.Args[0].(*Distinct); ok {
-							return fmt.Errorf("count(distinct <field>) can only have one argument")
-						}
-					}
-					return fmt.Errorf("invalid number of arguments for %s, expected %d, got %d", expr.Name, exp, got)
-				}
-				switch fc := expr.Args[0].(type) {
-				case *VarRef, *Wildcard, *RegexLiteral:
-					// do nothing
-				case *Call:
-					if fc.Name != "distinct" || expr.Name != "count" {
-						return fmt.Errorf("expected field argument in %s()", expr.Name)
-					} else if exp, got := 1, len(fc.Args); got != exp {
-						return fmt.Errorf("count(distinct <field>) can only have one argument")
-					} else if _, ok := fc.Args[0].(*VarRef); !ok {
-						return fmt.Errorf("expected field argument in distinct()")
-					}
-				case *Distinct:
-					if expr.Name != "count" {
-						return fmt.Errorf("expected field argument in %s()", expr.Name)
-					}
-				default:
-					return fmt.Errorf("expected field argument in %s()", expr.Name)
-				}
+			if err := s.validSelectWithAggregate(); err != nil {
+				return err
 			}
-		}
-	}
-
-	// Check that we have valid duration and where clauses for aggregates
-
-	// fetch the group by duration
-	groupByDuration, _ := s.GroupByInterval()
-
-	// If we have a group by interval, but no aggregate function, it's an invalid statement
-	if s.IsRawQuery && groupByDuration > 0 {
-		return fmt.Errorf("GROUP BY requires at least one aggregate function")
-	}
-
-	// If we have an aggregate function with a group by time without a where clause, it's an invalid statement
-	if tr == targetNotRequired { // ignore create continuous query statements
-		if !s.IsRawQuery && groupByDuration > 0 && !HasTimeExpr(s.Condition) {
-			return fmt.Errorf("aggregate functions with GROUP BY time require a WHERE time clause")
+			if len(expr.Args) != 1 {
+				return fmt.Errorf("invalid number of arguments for %s, expected 1, got %d", expr.Name, len(expr.Args))
+			}
+			switch fc := expr.Args[0].(type) {
+			case *VarRef:
+				// do nothing
+			case *BinaryExpr:
+				if err := fc.validateArgs(); err != nil {
+					return err
+				}
+			case *Wildcard:
+			default:
+				return fmt.Errorf("expected field argument in %s()", expr.Name)
+			}
 		}
 	}
 	return nil
@@ -2938,11 +2759,19 @@ func (a Dimensions) Normalize() (time.Duration, []string) {
 
 // Dimension represents an expression that a select statement is grouped by.
 type Dimension struct {
-	Expr Expr
+	Expr  Expr
+	Alias string
 }
 
 // String returns a string representation of the dimension.
-func (d *Dimension) String() string { return d.Expr.String() }
+func (d *Dimension) String() string {
+	str := d.Expr.String()
+
+	if d.Alias == "" {
+		return str
+	}
+	return fmt.Sprintf("%s AS %s", str, QuoteIdent(d.Alias))
+}
 
 // Measurements represents a list of measurements.
 type Measurements []*Measurement
