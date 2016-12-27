@@ -31,9 +31,11 @@ func main() {
 			COUNT(*) AS ipo_count
 			FROM "cc-packetbeat-4a859fff6e5c4521aab187eee1cfceb8-2016.12.22"
 			WHERE xxx.yy.type='mysql' AND yyy.zz > 1 AND xxx.zz != '123'
-			GROUP BY date_histogram('@timestamp', '1h') AS mysql_over_time`
+			GROUP BY date_histogram('@timestamp', '1h') AS mysql_over_time, tcp.dst_ip, tcp.dst_port
+			ORDER BY mysql_over_time LIMIT 1, 0`
 
-	sql = `SELECT * FROM symbol ORDER BY xxx ASC, yyy DESC LIMIT 1`
+	sql = "select exchange, sector, max(market_cap) from symbol group by exchange, sector, zzz"
+
 	stmt, err := sp.ParseStatement(sql)
 	if err != nil {
 		panic(err)
@@ -45,6 +47,10 @@ func main() {
 	fmt.Println(selectStmt)
 	fmt.Println(selectStmt.QueryFilter())
 	fmt.Println(selectStmt.QuerySort())
+	fmt.Println(selectStmt.TslBucketAggs())
+
+	// t, _ := json.MarshalIndent(js.MustMap(), "", "  ")
+	// fmt.Println(string(t))
 
 	js := simplejson.New()
 	js.Set("xx", "yy")
