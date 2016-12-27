@@ -833,10 +833,6 @@ func (s *SelectStatement) validate(tr targetRequirement) error {
 		return err
 	}
 
-	if err := s.validateDimensions(); err != nil {
-		return err
-	}
-
 	if err := s.validateDistinct(); err != nil {
 		return err
 	}
@@ -860,30 +856,6 @@ func (s *SelectStatement) validateFields() error {
 			if err := expr.validate(); err != nil {
 				return err
 			}
-		}
-	}
-	return nil
-}
-
-func (s *SelectStatement) validateDimensions() error {
-	for _, dim := range s.Dimensions {
-		switch expr := dim.Expr.(type) {
-		case *Call:
-			// Ensure the call is time() and it has one or two duration arguments.
-			// If we already have a duration
-			if expr.Name != "date_histogram" && expr.Name != "histogram" {
-				return errors.New("only time() calls allowed in dimensions")
-			} else if got := len(expr.Args); got < 2 {
-				return errors.New("time dimension expected 2 or more arguments")
-			}
-		case *VarRef:
-			if strings.ToLower(expr.Val) == "time" {
-				return errors.New("time() is a function and expects at least one argument")
-			}
-		case *Wildcard:
-		case *RegexLiteral:
-		default:
-			return errors.New("only time and tag dimensions allowed")
 		}
 	}
 	return nil

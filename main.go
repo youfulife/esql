@@ -34,7 +34,7 @@ func main() {
 			GROUP BY date_histogram('@timestamp', '1h') AS mysql_over_time, tcp.dst_ip, tcp.dst_port
 			ORDER BY mysql_over_time LIMIT 1, 0`
 
-	sql = "select exchange, sector, max(market_cap) from symbol group by exchange, sector, zzz"
+	sql = "select exchange, sector, max(market_cap) from symbol group by exchange, sector, zzz, avg(xxxx)"
 
 	stmt, err := sp.ParseStatement(sql)
 	if err != nil {

@@ -54,42 +54,80 @@ type BucketAgg int
 // These are a comprehensive list of bucket aggregations.
 const (
 	IllegalAgg BucketAgg = iota
-	DateHistogramAgg
-	DateRangeAgg
-	FilterAgg
-	FiltersAgg
-	GeoDistanceAgg
-	GeoHashGridAgg
-	GlobalAgg
-	HistogramAgg
+
+	metricBegin
+	//metric aggregations method
+	Avg
+	Cardinality
+	ExtendedStats
+	GeoBounds
+	GeoCentroid
+	Max
+	Min
+	Percentiles
+	PercentileRanks
+	Stats
+	Sum
+	Top
+	ValueCount
+
+	metricEnd
+
+	bucketBegin
+	//bucket aggregations method
+	DateHistogram
+	DateRange
+	Filter
+	Filters
+	GeoDistance
+	GeoHashGrid
+	Global
+	Histogram
 	IPRange
-	MissingAgg
-	NestedAgg
-	RangeAgg
-	ReverseNestedAgg
-	SamplerAgg
-	SignificantTermsAgg
-	TermsAgg
+	Missing
+	Nested
+	Range
+	ReverseNested
+	Sampler
+	SignificantTerms
+	Terms
+
+	bucketEnd
 )
 
 var aggs = [...]string{
-	IllegalAgg:          "ILLEGAL",
-	DateHistogramAgg:    "date_histogram",
-	DateRangeAgg:        "date_range",
-	FilterAgg:           "date_range",
-	FiltersAgg:          "filters",
-	GeoDistanceAgg:      "geo_distance",
-	GeoHashGridAgg:      "geohash_grid",
-	GlobalAgg:           "global",
-	HistogramAgg:        "histogram",
-	IPRange:             "ip_range",
-	MissingAgg:          "missing",
-	NestedAgg:           "nested",
-	RangeAgg:            "range",
-	ReverseNestedAgg:    "reverse_nested",
-	SamplerAgg:          "sampler",
-	SignificantTermsAgg: "significant_terms",
-	TermsAgg:            "terms",
+	IllegalAgg: "ILLEGAL",
+
+	Avg:             "avg",
+	Cardinality:     "cardinality",
+	ExtendedStats:   "extended_stats",
+	GeoBounds:       "geo_bounds",
+	GeoCentroid:     "geo_centroid",
+	Max:             "max",
+	Min:             "min",
+	Percentiles:     "percentiles",
+	PercentileRanks: "percentile_ranks",
+	Stats:           "stats",
+	Sum:             "sum",
+	Top:             "top",
+	ValueCount:      "value_count",
+
+	DateHistogram:    "date_histogram",
+	DateRange:        "date_range",
+	Filter:           "date_range",
+	Filters:          "filters",
+	GeoDistance:      "geo_distance",
+	GeoHashGrid:      "geohash_grid",
+	Global:           "global",
+	Histogram:        "histogram",
+	IPRange:          "ip_range",
+	Missing:          "missing",
+	Nested:           "nested",
+	Range:            "range",
+	ReverseNested:    "reverse_nested",
+	Sampler:          "sampler",
+	SignificantTerms: "significant_terms",
+	Terms:            "terms",
 }
 
 type Bucket struct {
@@ -101,11 +139,12 @@ type Bucket struct {
 
 func (b *Bucket) Map() map[string]interface{} {
 
-	temp := fmt.Sprintf(`{"%s":{"%s":{}}}`, b.name, aggs[b.typ])
-	js, err := simplejson.NewJson([]byte(temp))
-	if err != nil {
-		panic("bucket toJson error")
-	}
+	// temp := fmt.Sprintf(`{"%s":{"%s":{}}}`, b.name, aggs[b.typ])
+	// js, err := simplejson.NewJson([]byte(temp))
+	// if err != nil {
+	// 	panic("bucket toJson error")
+	// }
+	js := simplejson.New()
 	path := []string{b.name, aggs[b.typ]}
 
 	js.SetPath(path, b.params)
@@ -152,15 +191,18 @@ func (s *SelectStatement) TslBucketAggs() string {
 			switch fn {
 			case "date_histogram":
 
-				bkt.typ = DateHistogramAgg
+				bkt.typ = DateHistogram
 				bkt.params["field"] = expr.Args[0].String()
 				bkt.params["interval"] = expr.Args[1].String()
+			case "avg":
+				bkt.typ = Avg
+				bkt.params["script"] = expr.String()
 			default:
 				panic(fmt.Errorf("not support bucket aggregation"))
 			}
 
 		default:
-			bkt.typ = TermsAgg
+			bkt.typ = Terms
 			bkt.params["script"] = expr.String()
 		}
 		bucket.child = bkt
