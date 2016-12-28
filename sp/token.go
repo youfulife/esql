@@ -122,7 +122,6 @@ const (
 	SHARDS
 	SLIMIT
 	SOFFSET
-	STATS
 	SUBSCRIPTION
 	SUBSCRIPTIONS
 	TAG
@@ -238,7 +237,6 @@ var tokens = [...]string{
 	SHARDS:        "SHARDS",
 	SLIMIT:        "SLIMIT",
 	SOFFSET:       "SOFFSET",
-	STATS:         "STATS",
 	SUBSCRIPTION:  "SUBSCRIPTION",
 	SUBSCRIPTIONS: "SUBSCRIPTIONS",
 	TAG:           "TAG",

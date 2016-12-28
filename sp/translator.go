@@ -1,6 +1,7 @@
 package sp
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -49,11 +50,11 @@ func (s *SelectStatement) QuerySort() string {
 }
 
 // BucketAgg .
-type BucketAgg int
+type ESAgg int
 
-// These are a comprehensive list of bucket aggregations.
+// These are a comprehensive list of es aggregations.
 const (
-	IllegalAgg BucketAgg = iota
+	IllegalAgg ESAgg = iota
 
 	metricBegin
 	//metric aggregations method
@@ -132,7 +133,7 @@ var aggs = [...]string{
 
 type Bucket struct {
 	name   string
-	typ    BucketAgg
+	typ    ESAgg
 	params map[string]interface{}
 	child  *Bucket
 }
@@ -211,4 +212,78 @@ func (s *SelectStatement) TslBucketAggs() string {
 	root = root.child
 
 	return root.String()
+}
+
+type Metric struct {
+	name   string
+	typ    ESAgg
+	params map[string]interface{}
+}
+
+type Metrics []*Metric
+
+func (ms Metrics) String() string {
+	js := simplejson.New()
+
+	for _, m := range ms {
+		path := []string{"aggs", m.name, aggs[m.typ]}
+		js.SetPath(path, m.params)
+	}
+	s, err := js.MarshalJSON()
+	if err != nil {
+		return ""
+	}
+	t, _ := json.MarshalIndent(js.MustMap(), "", "  ")
+	fmt.Println(string(t))
+	return string(s)
+}
+
+func (s *SelectStatement) TslMetricAggs() string {
+	fields := s.Fields
+	var metrics Metrics
+	for _, field := range fields {
+		fn, ok := field.Expr.(*Call)
+		if !ok {
+			continue
+		}
+		metric := &Metric{}
+		metric.params = make(map[string]interface{})
+		metric.name = fn.String()
+
+		switch fn.Name {
+		case "avg":
+			metric.typ = Avg
+			metric.params["script"] = fn.Args[0].String()
+		case "cardinality":
+			metric.typ = Cardinality
+			metric.params["script"] = fn.Args[0].String()
+		case "sum":
+			metric.typ = Sum
+			metric.params["script"] = fn.Args[0].String()
+		case "max":
+			metric.typ = Max
+			metric.params["script"] = fn.Args[0].String()
+		case "min":
+			metric.typ = Min
+			metric.params["script"] = fn.Args[0].String()
+		case "top":
+			metric.typ = Top
+			metric.params["script"] = fn.Args[0].String()
+		case "count":
+			metric.typ = ValueCount
+			metric.params["script"] = fn.Args[0].String()
+		case "stats":
+			metric.typ = Stats
+			metric.params["script"] = fn.Args[0].String()
+		case "extended_stats":
+			metric.typ = ExtendedStats
+			metric.params["script"] = fn.Args[0].String()
+		default:
+			panic(fmt.Errorf("not support metric aggregation"))
+		}
+
+		metrics = append(metrics, metric)
+	}
+
+	return metrics.String()
 }
