@@ -47,8 +47,7 @@ func main() {
 	fmt.Println(selectStmt)
 	// fmt.Println(selectStmt.QueryFilter())
 	// fmt.Println(selectStmt.QuerySort())
-	// fmt.Println(selectStmt.TslBucketAggs())
-	// fmt.Println(selectStmt.TslMetricAggs())
+
 	fmt.Println(selectStmt.EsDsl())
 
 	js := simplejson.New()

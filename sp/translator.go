@@ -49,7 +49,7 @@ func (s *SelectStatement) QuerySort() string {
 	return fmt.Sprintf(`"sort": [%s]`, strings.Join(sort, ","))
 }
 
-// BucketAgg .
+// ESAgg .
 type ESAgg int
 
 // These are a comprehensive list of es aggregations.
@@ -139,12 +139,13 @@ type Agg struct {
 
 type Aggs []*Agg
 
-func (stmt *SelectStatement) EsDsl() string {
+//EsDsl return dsl json string
+func (s *SelectStatement) EsDsl() string {
 
 	js := simplejson.New()
 	path := []string{"aggs"}
 
-	baggs := stmt.BucketAggregates()
+	baggs := s.bucketAggregates()
 	for _, a := range baggs {
 		_path := append(path, []string{a.name, aggs[a.typ]}...)
 		js.SetPath(_path, a.params)
@@ -155,23 +156,23 @@ func (stmt *SelectStatement) EsDsl() string {
 		path = append(path, "aggs")
 	}
 
-	maggs := stmt.MetricAggs()
+	maggs := s.metricAggs()
 	for _, a := range maggs {
 		_path := append(path, []string{a.name, aggs[a.typ]}...)
 		js.SetPath(_path, a.params)
 	}
 
-	s, err := js.MarshalJSON()
+	_s, err := js.MarshalJSON()
 	if err != nil {
 		return ""
 	}
 	t, _ := json.MarshalIndent(js.MustMap(), "", "  ")
 	fmt.Println(string(t))
 
-	return string(s)
+	return string(_s)
 }
 
-func (s *SelectStatement) BucketAggregates() Aggs {
+func (s *SelectStatement) bucketAggregates() Aggs {
 	var aggs Aggs
 	for _, dim := range s.Dimensions {
 		agg := &Agg{}
@@ -201,7 +202,7 @@ func (s *SelectStatement) BucketAggregates() Aggs {
 	return aggs
 }
 
-func (s *SelectStatement) MetricAggs() Aggs {
+func (s *SelectStatement) metricAggs() Aggs {
 	var aggs Aggs
 	for _, field := range s.Fields {
 		fn, ok := field.Expr.(*Call)
