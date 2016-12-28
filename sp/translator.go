@@ -131,60 +131,52 @@ var aggs = [...]string{
 	Terms:            "terms",
 }
 
-type Bucket struct {
+type Agg struct {
 	name   string
 	typ    ESAgg
 	params map[string]interface{}
-	child  *Bucket
 }
 
-func (b *Bucket) Map() map[string]interface{} {
+type Aggs []*Agg
 
-	// temp := fmt.Sprintf(`{"%s":{"%s":{}}}`, b.name, aggs[b.typ])
-	// js, err := simplejson.NewJson([]byte(temp))
-	// if err != nil {
-	// 	panic("bucket toJson error")
-	// }
-	js := simplejson.New()
-	path := []string{b.name, aggs[b.typ]}
+func (stmt *SelectStatement) EsDsl() string {
 
-	js.SetPath(path, b.params)
-
-	return js.MustMap()
-}
-
-func (b *Bucket) String() string {
 	js := simplejson.New()
 	path := []string{"aggs"}
-	for {
-		js.SetPath(path, b.Map())
-		if b.child == nil {
-			break
+
+	baggs := stmt.BucketAggregates()
+	for _, a := range baggs {
+		_path := append(path, []string{a.name, aggs[a.typ]}...)
+		js.SetPath(_path, a.params)
+
+		if a.typ == Terms {
+			path = append(path, a.name)
 		}
 		path = append(path, "aggs")
-		b = b.child
 	}
+
+	maggs := stmt.MetricAggs()
+	for _, a := range maggs {
+		_path := append(path, []string{a.name, aggs[a.typ]}...)
+		js.SetPath(_path, a.params)
+	}
+
 	s, err := js.MarshalJSON()
 	if err != nil {
 		return ""
 	}
+	t, _ := json.MarshalIndent(js.MustMap(), "", "  ")
+	fmt.Println(string(t))
 
 	return string(s)
 }
 
-func (s *SelectStatement) TslBucketAggs() string {
-	dimensions := s.Dimensions
-	bucket := &Bucket{}
-	//dummy node
-	root := bucket
-	for _, dim := range dimensions {
-		bkt := &Bucket{}
-		bkt.params = make(map[string]interface{})
-		if len(dim.Alias) > 0 {
-			bkt.name = dim.Alias
-		} else {
-			bkt.name = dim.String()
-		}
+func (s *SelectStatement) BucketAggregates() Aggs {
+	var aggs Aggs
+	for _, dim := range s.Dimensions {
+		agg := &Agg{}
+		agg.params = make(map[string]interface{})
+		agg.name = dim.String()
 
 		switch expr := dim.Expr.(type) {
 		case *Call:
@@ -192,98 +184,68 @@ func (s *SelectStatement) TslBucketAggs() string {
 			switch fn {
 			case "date_histogram":
 
-				bkt.typ = DateHistogram
-				bkt.params["field"] = expr.Args[0].String()
-				bkt.params["interval"] = expr.Args[1].String()
-			case "avg":
-				bkt.typ = Avg
-				bkt.params["script"] = expr.String()
+				agg.typ = DateHistogram
+				agg.params["field"] = expr.Args[0].String()
+				agg.params["interval"] = expr.Args[1].String()
 			default:
 				panic(fmt.Errorf("not support bucket aggregation"))
 			}
 
 		default:
-			bkt.typ = Terms
-			bkt.params["script"] = expr.String()
+			agg.typ = Terms
+			agg.params["script"] = expr.String()
 		}
-		bucket.child = bkt
-		bucket = bucket.child
+		aggs = append(aggs, agg)
 	}
-	root = root.child
 
-	return root.String()
+	return aggs
 }
 
-type Metric struct {
-	name   string
-	typ    ESAgg
-	params map[string]interface{}
-}
-
-type Metrics []*Metric
-
-func (ms Metrics) String() string {
-	js := simplejson.New()
-
-	for _, m := range ms {
-		path := []string{"aggs", m.name, aggs[m.typ]}
-		js.SetPath(path, m.params)
-	}
-	s, err := js.MarshalJSON()
-	if err != nil {
-		return ""
-	}
-	t, _ := json.MarshalIndent(js.MustMap(), "", "  ")
-	fmt.Println(string(t))
-	return string(s)
-}
-
-func (s *SelectStatement) TslMetricAggs() string {
-	fields := s.Fields
-	var metrics Metrics
-	for _, field := range fields {
+func (s *SelectStatement) MetricAggs() Aggs {
+	var aggs Aggs
+	for _, field := range s.Fields {
 		fn, ok := field.Expr.(*Call)
 		if !ok {
 			continue
 		}
-		metric := &Metric{}
-		metric.params = make(map[string]interface{})
-		metric.name = fn.String()
+		agg := &Agg{}
+		agg.params = make(map[string]interface{})
+		agg.name = fn.String()
 
 		switch fn.Name {
 		case "avg":
-			metric.typ = Avg
-			metric.params["script"] = fn.Args[0].String()
+			agg.typ = Avg
+			agg.params["script"] = fn.Args[0].String()
 		case "cardinality":
-			metric.typ = Cardinality
-			metric.params["script"] = fn.Args[0].String()
+			agg.typ = Cardinality
+			agg.params["script"] = fn.Args[0].String()
 		case "sum":
-			metric.typ = Sum
-			metric.params["script"] = fn.Args[0].String()
+			agg.typ = Sum
+			agg.params["script"] = fn.Args[0].String()
 		case "max":
-			metric.typ = Max
-			metric.params["script"] = fn.Args[0].String()
+			agg.typ = Max
+			agg.params["script"] = fn.Args[0].String()
 		case "min":
-			metric.typ = Min
-			metric.params["script"] = fn.Args[0].String()
+			agg.typ = Min
+			agg.params["script"] = fn.Args[0].String()
 		case "top":
-			metric.typ = Top
-			metric.params["script"] = fn.Args[0].String()
+			agg.typ = Top
+			agg.params["script"] = fn.Args[0].String()
 		case "count":
-			metric.typ = ValueCount
-			metric.params["script"] = fn.Args[0].String()
+			agg.typ = ValueCount
+			agg.params["script"] = fn.Args[0].String()
 		case "stats":
-			metric.typ = Stats
-			metric.params["script"] = fn.Args[0].String()
+			agg.typ = Stats
+			agg.params["script"] = fn.Args[0].String()
 		case "extended_stats":
-			metric.typ = ExtendedStats
-			metric.params["script"] = fn.Args[0].String()
+			agg.typ = ExtendedStats
+			agg.params["script"] = fn.Args[0].String()
 		default:
-			panic(fmt.Errorf("not support metric aggregation"))
+			panic(fmt.Errorf("not support agg aggregation"))
 		}
 
-		metrics = append(metrics, metric)
+		aggs = append(aggs, agg)
 	}
 
-	return metrics.String()
+	return aggs
 }

@@ -34,7 +34,7 @@ func main() {
 			GROUP BY date_histogram('@timestamp', '1h') AS mysql_over_time, tcp.dst_ip, tcp.dst_port
 			ORDER BY mysql_over_time LIMIT 1, 0`
 
-	sql = "select stats(exchange), avg(sector), avg(market_cap) from symbol group by exchange, sector"
+	sql = "select exchange, sector, max(market_cap) from symbol group by exchange, sector"
 
 	stmt, err := sp.ParseStatement(sql)
 	if err != nil {
@@ -45,10 +45,11 @@ func main() {
 		panic("Not support stmt")
 	}
 	fmt.Println(selectStmt)
-	fmt.Println(selectStmt.QueryFilter())
-	fmt.Println(selectStmt.QuerySort())
-	fmt.Println(selectStmt.TslBucketAggs())
-	fmt.Println(selectStmt.TslMetricAggs())
+	// fmt.Println(selectStmt.QueryFilter())
+	// fmt.Println(selectStmt.QuerySort())
+	// fmt.Println(selectStmt.TslBucketAggs())
+	// fmt.Println(selectStmt.TslMetricAggs())
+	fmt.Println(selectStmt.EsDsl())
 
 	js := simplejson.New()
 	js.Set("xx", "yy")
