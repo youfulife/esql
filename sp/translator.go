@@ -106,7 +106,7 @@ func (s *SelectStatement) EsDsl() string {
 	js.Set("size", s.Limit)
 
 	//sort
-	var sort []map[string]string
+	sort := make([]map[string]string, 0, len(s.SortFields))
 	for _, sf := range s.SortFields {
 		m := make(map[string]string)
 		if sf.Ascending {
@@ -219,7 +219,12 @@ func (s *SelectStatement) metricAggs() Aggs {
 			agg.params["script"] = fn.Args[0].String()
 		case "count":
 			agg.typ = ValueCount
-			agg.params["script"] = fn.Args[0].String()
+			if fn.Args[0].String() == "*" {
+				agg.params["field"] = ""
+			} else {
+				agg.params["script"] = fn.Args[0].String()
+			}
+
 		case "stats":
 			agg.typ = Stats
 			agg.params["script"] = fn.Args[0].String()

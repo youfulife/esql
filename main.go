@@ -16,6 +16,7 @@ func main() {
 
 	cfg := flag.String("c", "cfg.json", "configuration file")
 	version := flag.Bool("v", false, "show version")
+	sql := flag.String("s", "", "sql select statement")
 	flag.Parse()
 
 	if *version {
@@ -23,28 +24,14 @@ func main() {
 		os.Exit(0)
 	}
 
+	if len(*sql) == 0 {
+		os.Exit(0)
+	}
+
 	g.ParseConfig(*cfg)
 	fmt.Println(g.Config())
 
-	sql := `select mysql_over_time,
-			sum(mysql.bytes_in) / sum(mysql.bytes_in+mysql.bytes_out) AS in_bytes_rate,
-			COUNT(*) AS ipo_count
-			FROM "cc-packetbeat-4a859fff6e5c4521aab187eee1cfceb8-2016.12.22"
-			WHERE xxx.yy.type='mysql' AND yyy.zz > 1 AND xxx.zz != '123'
-			GROUP BY date_histogram('@timestamp', '1h') AS mysql_over_time, tcp.dst_ip, tcp.dst_port
-			ORDER BY mysql_over_time LIMIT 1, 0`
-
-	sql = "select exchange, sector, max(market_cap) from symbol group by exchange, sector"
-	sql = "select exchange, max(market_cap) from symbol group by exchange"
-	sql = "select * from symbol where exchange='nyse' limit 1"
-	sql = "select * from symbol where exchange='nyse' and sector='Technology' limit 1"
-	sql = "select * from symbol where last_sale > 985 limit 1"
-	sql = "select * from symbol where last_sale != 985 limit 1"
-	sql = "select * from symbol where exchange='nyse' AND sector!='Technology' limit 1"
-	sql = "select * from symbol where exchange='nyse' OR sector!='Technology' limit 1"
-	sql = "select * from quote where @timestamp > 1482908284586 limit 1"
-	sql = "select * from symbol order by name limit 1"
-	stmt, err := sp.ParseStatement(sql)
+	stmt, err := sp.ParseStatement(*sql)
 	if err != nil {
 		panic(err)
 	}
