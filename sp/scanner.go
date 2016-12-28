@@ -30,7 +30,7 @@ func (s *Scanner) Scan() (tok Token, pos Pos, lit string) {
 	// as an ident or reserved word.
 	if isWhitespace(ch0) {
 		return s.scanWhitespace()
-	} else if isLetter(ch0) || ch0 == '_' {
+	} else if isLetter(ch0) || ch0 == '_' || ch0 == '@' {
 		s.r.unread()
 		return s.scanIdent(true)
 	} else if isDigit(ch0) {
@@ -318,7 +318,7 @@ func isLetter(ch rune) bool { return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && c
 func isDigit(ch rune) bool { return (ch >= '0' && ch <= '9') }
 
 // isIdentChar returns true if the rune can be used in an unquoted identifier.
-func isIdentChar(ch rune) bool { return isLetter(ch) || isDigit(ch) || ch == '_' }
+func isIdentChar(ch rune) bool { return isLetter(ch) || isDigit(ch) || ch == '_' || ch == '@' }
 
 // isIdentFirstChar returns true if the rune can be used as the first char in an unquoted identifer.
 func isIdentFirstChar(ch rune) bool { return isLetter(ch) || ch == '_' }

@@ -35,7 +35,15 @@ func main() {
 			ORDER BY mysql_over_time LIMIT 1, 0`
 
 	sql = "select exchange, sector, max(market_cap) from symbol group by exchange, sector"
-
+	sql = "select exchange, max(market_cap) from symbol group by exchange"
+	sql = "select * from symbol where exchange='nyse' limit 1"
+	sql = "select * from symbol where exchange='nyse' and sector='Technology' limit 1"
+	sql = "select * from symbol where last_sale > 985 limit 1"
+	sql = "select * from symbol where last_sale != 985 limit 1"
+	sql = "select * from symbol where exchange='nyse' AND sector!='Technology' limit 1"
+	sql = "select * from symbol where exchange='nyse' OR sector!='Technology' limit 1"
+	sql = "select * from quote where @timestamp > 1482908284586 limit 1"
+	sql = "select * from symbol order by name limit 1"
 	stmt, err := sp.ParseStatement(sql)
 	if err != nil {
 		panic(err)
@@ -45,8 +53,6 @@ func main() {
 		panic("Not support stmt")
 	}
 	fmt.Println(selectStmt)
-	// fmt.Println(selectStmt.QueryFilter())
-	// fmt.Println(selectStmt.QuerySort())
 
 	fmt.Println(selectStmt.EsDsl())
 

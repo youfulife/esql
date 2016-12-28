@@ -3,53 +3,11 @@ package sp
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/bitly/go-simplejson"
 )
 
-type EsDsl struct {
-	From         int
-	Size         int
-	Query        string
-	Sort         []string
-	Fields       []string
-	ScriptFields []string
-	Aggs         string
-}
-
-func (s *SelectStatement) QueryFrom() int {
-	return s.Offset
-}
-
-func (s *SelectStatement) QuerySize() int {
-	return s.Limit
-}
-
-func (s *SelectStatement) QueryFilter() string {
-	cond := s.Condition
-	if cond == nil {
-		return ""
-	}
-	return fmt.Sprintf(`"query": {"bool": {"filter": { "script": { "script": "%s"}}}}`, cond.String())
-}
-
-func (s *SelectStatement) QuerySort() string {
-	sort := make([]string, 0, len(s.SortFields))
-	var a string
-	for _, field := range s.SortFields {
-		if field.Ascending {
-			a = "ASC"
-		} else {
-			a = "DESC"
-		}
-		s := fmt.Sprintf(`{"%s": "%s"}`, field.Name, a)
-		sort = append(sort, s)
-	}
-	return fmt.Sprintf(`"sort": [%s]`, strings.Join(sort, ","))
-}
-
-// ESAgg .
+// ESAgg enum
 type ESAgg int
 
 // These are a comprehensive list of es aggregations.
@@ -143,8 +101,35 @@ type Aggs []*Agg
 func (s *SelectStatement) EsDsl() string {
 
 	js := simplejson.New()
-	path := []string{"aggs"}
+	//from and size
+	js.Set("from", s.Offset)
+	js.Set("size", s.Limit)
 
+	//sort
+	var sort []map[string]string
+	for _, sf := range s.SortFields {
+		m := make(map[string]string)
+		if sf.Ascending {
+			m[sf.Name] = "asc"
+		} else {
+			m[sf.Name] = "desc"
+		}
+		sort = append(sort, m)
+	}
+	js.Set("sort", sort)
+
+	//fields
+	//scirpt fields
+
+	//query
+	if s.Condition != nil {
+		branch := []string{"query", "bool", "filter", "script", "script"}
+		js.SetPath(branch, s.Condition.String())
+	}
+
+	// build aggregates
+	path := []string{"aggs"}
+	//bucket aggregates
 	baggs := s.bucketAggregates()
 	for _, a := range baggs {
 		_path := append(path, []string{a.name, aggs[a.typ]}...)
@@ -155,7 +140,7 @@ func (s *SelectStatement) EsDsl() string {
 		}
 		path = append(path, "aggs")
 	}
-
+	//metric aggregates
 	maggs := s.metricAggs()
 	for _, a := range maggs {
 		_path := append(path, []string{a.name, aggs[a.typ]}...)

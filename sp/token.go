@@ -99,7 +99,6 @@ const (
 	LIMIT
 	MEASUREMENT
 	MEASUREMENTS
-	NAME
 	OFFSET
 	ON
 	ORDER
@@ -214,7 +213,6 @@ var tokens = [...]string{
 	LIMIT:         "LIMIT",
 	MEASUREMENT:   "MEASUREMENT",
 	MEASUREMENTS:  "MEASUREMENTS",
-	NAME:          "NAME",
 	OFFSET:        "OFFSET",
 	ON:            "ON",
 	ORDER:         "ORDER",
