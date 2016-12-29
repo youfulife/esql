@@ -3,6 +3,8 @@ package sp
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
+	"strings"
 
 	"github.com/bitly/go-simplejson"
 )
@@ -135,10 +137,10 @@ func (s *SelectStatement) EsDsl() string {
 		_path := append(path, []string{a.name, aggs[a.typ]}...)
 		js.SetPath(_path, a.params)
 
-		if a.typ == Terms {
-			path = append(path, a.name)
-		}
-		path = append(path, "aggs")
+		// if a.typ == Terms {
+		// path = append(path, a.name)
+		// }
+		path = append(path, a.name, "aggs")
 	}
 	//metric aggregates
 	maggs := s.metricAggs()
@@ -157,12 +159,29 @@ func (s *SelectStatement) EsDsl() string {
 	return string(_s)
 }
 
+// todo: replace all doc['xxx'].value to xxx
+func aggName(s string) string {
+	reg := regexp.MustCompile(`\['(.+)'\]`)
+	l := reg.FindStringSubmatch(s)
+	if len(l) == 0 {
+		return s
+	}
+	if len(l) > 1 {
+		return l[1]
+	}
+	return l[0]
+}
+
 func (s *SelectStatement) bucketAggregates() Aggs {
 	var aggs Aggs
 	for _, dim := range s.Dimensions {
 		agg := &Agg{}
 		agg.params = make(map[string]interface{})
-		agg.name = dim.String()
+		if dim.Alias == "" {
+			agg.name = aggName(dim.String())
+		} else {
+			agg.name = aggName(dim.Alias)
+		}
 
 		switch expr := dim.Expr.(type) {
 		case *Call:
@@ -171,8 +190,9 @@ func (s *SelectStatement) bucketAggregates() Aggs {
 			case "date_histogram":
 
 				agg.typ = DateHistogram
-				agg.params["field"] = expr.Args[0].String()
-				agg.params["interval"] = expr.Args[1].String()
+				agg.params["field"] = strings.Trim(expr.Args[0].String(), "'")
+				//support `year`, `quarter`, `month`, `week`, `day`, `hour`, `minute`, `second`
+				agg.params["interval"] = strings.Trim(expr.Args[1].String(), "'")
 			default:
 				panic(fmt.Errorf("not support bucket aggregation"))
 			}
@@ -196,7 +216,7 @@ func (s *SelectStatement) metricAggs() Aggs {
 		}
 		agg := &Agg{}
 		agg.params = make(map[string]interface{})
-		agg.name = fn.String()
+		agg.name = fmt.Sprintf(`%s(%s)`, fn.Name, aggName(fn.Args[0].String()))
 
 		switch fn.Name {
 		case "avg":
