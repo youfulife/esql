@@ -22,10 +22,11 @@ Convert sql to elastic search DSL
 "select exchange, max(market_cap) from symbol group by exchange"
 "select exchange, sector, max(market_cap) from symbol group by exchange, sector"
 "select year, max(adj_close) from quote where symbol='AAPL' group by date_histogram('@timestamp','1y') as year"
+"select ipo_year_range, count(*) from symbol group by histogram(ipo_year, 5) as ipo_year_range"
+"SELECT ipo_year_range, COUNT(*) FROM symbol GROUP BY range(ipo_year, 2000) AS ipo_year_range"
 
 ```
 # Todo
 ```
 "select * from symbol WHERE symbol LIKE 'AAP%'"
-"select ipo_year_range, count(*) from symbol group by histogram(ipo_year, 5) as ipo_year_range"
 ```

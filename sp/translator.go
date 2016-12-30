@@ -187,6 +187,38 @@ func (s *SelectStatement) bucketAggregates() Aggs {
 		case *Call:
 			fn := expr.Name
 			switch fn {
+			case "range":
+				agg.typ = Range
+				switch arg0 := expr.Args[0].(type) {
+				case *BinaryExpr:
+					agg.params["script"] = arg0.String()
+				default:
+					agg.params["field"] = aggName(arg0.String())
+				}
+				agg.params["keyed"] = true
+				ranges := make([]map[string]string, 0, len(expr.Args))
+				args := expr.Args[1:]
+				for i, arg := range args {
+					m := make(map[string]string)
+					if i == 0 {
+						m["to"] = arg.String()
+					} else {
+						m["from"] = args[i-1].String()
+						m["to"] = arg.String()
+					}
+					ranges = append(ranges, m)
+				}
+				ranges = append(ranges, map[string]string{"from": args[len(args)-1].String()})
+				agg.params["ranges"] = ranges
+
+			case "histogram":
+
+				agg.typ = Histogram
+				agg.params["field"] = aggName(expr.Args[0].String())
+				agg.params["interval"] = expr.Args[1].String()
+				agg.params["min_doc_count"] = 0
+				// agg.params["min"] = expr.Args[2].String()
+				// agg.params["max"] = expr.Args[3].String()
 			case "date_histogram":
 
 				agg.typ = DateHistogram
