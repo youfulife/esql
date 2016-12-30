@@ -887,6 +887,7 @@ func (p *Parser) ParseExpr() (Expr, error) {
 	for {
 		// If the next token is NOT an operator then return the expression.
 		op, _, _ := p.scanIgnoreWhitespace()
+
 		if !op.isOperator() {
 			p.unscan()
 			return root.RHS, nil

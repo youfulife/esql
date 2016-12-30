@@ -86,30 +86,7 @@ func TestScanner_Scan(t *testing.T) {
 
 		// Numbers
 		{s: `100`, tok: sp.INTEGER, lit: `100`},
-		{s: `-100`, tok: sp.INTEGER, lit: `-100`},
-		{s: `100.23`, tok: sp.NUMBER, lit: `100.23`},
-		{s: `+100.23`, tok: sp.NUMBER, lit: `+100.23`},
-		{s: `-100.23`, tok: sp.NUMBER, lit: `-100.23`},
-		{s: `-100.`, tok: sp.NUMBER, lit: `-100`},
-		{s: `.23`, tok: sp.NUMBER, lit: `.23`},
-		{s: `+.23`, tok: sp.NUMBER, lit: `+.23`},
-		{s: `-.23`, tok: sp.NUMBER, lit: `-.23`},
-		//{s: `.`, tok: sp.ILLEGAL, lit: `.`},
-		{s: `-.`, tok: sp.SUB, lit: ``},
-		{s: `+.`, tok: sp.ADD, lit: ``},
 		{s: `10.3s`, tok: sp.NUMBER, lit: `10.3`},
-
-		// Durations
-		{s: `10u`, tok: sp.DURATIONVAL, lit: `10u`},
-		{s: `10µ`, tok: sp.DURATIONVAL, lit: `10µ`},
-		{s: `10ms`, tok: sp.DURATIONVAL, lit: `10ms`},
-		{s: `-1s`, tok: sp.DURATIONVAL, lit: `-1s`},
-		{s: `10m`, tok: sp.DURATIONVAL, lit: `10m`},
-		{s: `10h`, tok: sp.DURATIONVAL, lit: `10h`},
-		{s: `10d`, tok: sp.DURATIONVAL, lit: `10d`},
-		{s: `10w`, tok: sp.DURATIONVAL, lit: `10w`},
-		{s: `10x`, tok: sp.DURATIONVAL, lit: `10x`}, // non-duration unit, but scanned as a duration value
-
 		// Keywords
 		{s: `ALL`, tok: sp.ALL},
 		{s: `ALTER`, tok: sp.ALTER},
@@ -294,4 +271,12 @@ func TestScanRegex(t *testing.T) {
 			t.Errorf("%d. %s: error:\n\texp=%s\n\tgot=%s\n", i, tt.in, tt.lit, lit)
 		}
 	}
+}
+
+// errstring converts an error to its string representation.
+func errstring(err error) string {
+	if err != nil {
+		return err.Error()
+	}
+	return ""
 }

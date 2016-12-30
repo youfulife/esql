@@ -185,6 +185,17 @@ func (s *SelectStatement) EsDsl() string {
 		branch := []string{"query", "bool", "filter", "script", "script"}
 		js.SetPath(branch, s.Condition.String())
 	}
+	fields := s.NamesInDimension()
+	// fmt.Println(fields)
+	fieldFilters := make([]map[string]interface{}, 0)
+	branch := []string{"query", "bool", "filter", "and"}
+	for _, f := range fields {
+		_js := simplejson.New()
+		existsBranch := []string{"exists", "field"}
+		_js.SetPath(existsBranch, f)
+		fieldFilters = append(fieldFilters, _js.MustMap())
+	}
+	js.SetPath(branch, fieldFilters)
 
 	// build aggregates
 	path := []string{"aggs"}
@@ -287,7 +298,17 @@ func (s *SelectStatement) bucketAggregates() Aggs {
 				//support `year`, `quarter`, `month`, `week`, `day`, `hour`, `minute`, `second`
 				agg.params["interval"] = strings.Trim(expr.Args[1].String(), "'")
 			default:
-				panic(fmt.Errorf("not support bucket aggregation"))
+				// terms inline expression
+				agg.typ = Terms
+				//order
+				if len(s.SortFields) > 0 {
+					agg.params["order"] = s.orders()
+				}
+				agg.params["size"] = s.Limit
+				m := make(map[string]string, 0)
+				m["lang"] = "expression"
+				m["inline"] = expr.String()
+				agg.params["script"] = m
 			}
 
 		default:
@@ -299,7 +320,9 @@ func (s *SelectStatement) bucketAggregates() Aggs {
 				agg.params["field"] = aggName(term.String())
 			}
 			//order
-			agg.params["order"] = s.orders()
+			if len(s.SortFields) > 0 {
+				agg.params["order"] = s.orders()
+			}
 			agg.params["size"] = s.Limit
 		}
 		aggs = append(aggs, agg)

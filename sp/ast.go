@@ -1168,9 +1168,10 @@ func walkNames(exp Expr) []string {
 	case *Call:
 		var a []string
 		for _, expr := range expr.Args {
-			if ref, ok := expr.(*VarRef); ok {
-				a = append(a, ref.Val)
-			}
+			// if ref, ok := expr.(*VarRef); ok {
+			// 	a = append(a, ref.Val)
+			// }
+			a = append(a, walkNames(expr)...)
 		}
 		return a
 	case *BinaryExpr:

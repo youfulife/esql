@@ -59,12 +59,16 @@ func (s *Scanner) Scan() (tok Token, pos Pos, lit string) {
 			return tok, pos, "$" + lit
 		}
 		return BOUNDPARAM, pos, "$" + lit
-	case '+', '-':
-		return s.scanNumber()
+	case '+':
+		return ADD, pos, ""
+	case '-':
+		return SUB, pos, ""
 	case '*':
 		return MUL, pos, ""
 	case '/':
 		return DIV, pos, ""
+	case '%':
+		return MOD, pos, ""
 	case '=':
 		if ch1, _ := s.r.read(); ch1 == '~' {
 			return EQREGEX, pos, ""

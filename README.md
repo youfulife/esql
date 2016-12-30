@@ -27,6 +27,8 @@ Convert sql to elastic search DSL
 "SELECT ipo_year, COUNT(*) FROM symbol GROUP BY ipo_year ORDER BY ipo_year LIMIT 3"
 "SELECT ipo_year, COUNT(*) AS ipo_count FROM symbol GROUP BY ipo_year ORDER BY ipo_count LIMIT 2"
 "SELECT ipo_year, MAX(market_cap) AS max_market_cap FROM symbol GROUP BY ipo_year ORDER BY max_market_cap LIMIT 2"
+"SELECT ipo_year_rem, COUNT(*) FROM symbol GROUP BY ipo_year % 5 AS ipo_year_rem"
+"SELECT shares_count, COUNT(*) FROM symbol GROUP BY floor(market_cap / last_sale / 1000000)  AS shares_count ORDER BY shares_count LIMIT 3"
 
 ```
 # Todo
