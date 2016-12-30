@@ -31,6 +31,7 @@ const (
 	Sum
 	Top
 	ValueCount
+	StarCount // count(*)
 
 	metricEnd
 
@@ -72,6 +73,7 @@ var aggs = [...]string{
 	Sum:             "sum",
 	Top:             "top",
 	ValueCount:      "value_count",
+	StarCount:       "star_count",
 
 	DateHistogram:    "date_histogram",
 	DateRange:        "date_range",
@@ -99,26 +101,81 @@ type Agg struct {
 
 type Aggs []*Agg
 
-//EsDsl return dsl json string
-func (s *SelectStatement) EsDsl() string {
+func (s *SelectStatement) isGroupBySort(f string) bool {
+	for _, d := range s.Dimensions {
+		var _s string
+		if d.Alias == "" {
+			_s = aggName(d.String())
+		} else {
+			_s = aggName(d.Alias)
+		}
+		if _s == f {
+			return true
+		}
+	}
+	return false
+}
 
-	js := simplejson.New()
-	//from and size
-	js.Set("from", s.Offset)
-	js.Set("size", s.Limit)
+func (s *SelectStatement) isStarCountSort(f string) bool {
+	for _, field := range s.Fields {
+		fn, ok := field.Expr.(*Call)
+		if !ok {
+			continue
+		}
+		switch fn.Name {
+		case "count":
+			if fn.Args[0].String() == "*" && field.Alias == f {
+				return true
+			}
+		}
+	}
+	return false
+}
 
-	//sort
-	sort := make([]map[string]string, 0, len(s.SortFields))
+func (s *SelectStatement) orders() []map[string]string {
+	order := make([]map[string]string, 0, len(s.SortFields))
 	for _, sf := range s.SortFields {
+		if s.isGroupBySort(sf.Name) {
+			sf.Name = "_term"
+		}
+		if s.isStarCountSort(sf.Name) {
+			sf.Name = "_count"
+		}
 		m := make(map[string]string)
 		if sf.Ascending {
 			m[sf.Name] = "asc"
 		} else {
 			m[sf.Name] = "desc"
 		}
-		sort = append(sort, m)
+		order = append(order, m)
 	}
-	js.Set("sort", sort)
+	return order
+}
+
+//EsDsl return dsl json string
+func (s *SelectStatement) EsDsl() string {
+
+	js := simplejson.New()
+
+	if len(s.Dimensions) == 0 {
+		//from and size
+		js.Set("from", s.Offset)
+		js.Set("size", s.Limit)
+		//sort
+		sort := make([]map[string]string, 0, len(s.SortFields))
+		for _, sf := range s.SortFields {
+			m := make(map[string]string)
+			if sf.Ascending {
+				m[sf.Name] = "asc"
+			} else {
+				m[sf.Name] = "desc"
+			}
+			sort = append(sort, m)
+		}
+		js.Set("sort", sort)
+	} else {
+		js.Set("size", 0)
+	}
 
 	//fields
 	//scirpt fields
@@ -145,6 +202,10 @@ func (s *SelectStatement) EsDsl() string {
 	//metric aggregates
 	maggs := s.metricAggs()
 	for _, a := range maggs {
+		if a.typ == StarCount {
+			js.SetPath(path, make(map[string]string, 0))
+			continue
+		}
 		_path := append(path, []string{a.name, aggs[a.typ]}...)
 		js.SetPath(_path, a.params)
 	}
@@ -231,7 +292,15 @@ func (s *SelectStatement) bucketAggregates() Aggs {
 
 		default:
 			agg.typ = Terms
-			agg.params["script"] = expr.String()
+			switch term := expr.(type) {
+			case *BinaryExpr:
+				agg.params["script"] = term.String()
+			default:
+				agg.params["field"] = aggName(term.String())
+			}
+			//order
+			agg.params["order"] = s.orders()
+			agg.params["size"] = s.Limit
 		}
 		aggs = append(aggs, agg)
 	}
@@ -248,7 +317,11 @@ func (s *SelectStatement) metricAggs() Aggs {
 		}
 		agg := &Agg{}
 		agg.params = make(map[string]interface{})
-		agg.name = fmt.Sprintf(`%s(%s)`, fn.Name, aggName(fn.Args[0].String()))
+		if field.Alias == "" {
+			agg.name = fmt.Sprintf(`%s(%s)`, fn.Name, aggName(fn.Args[0].String()))
+		} else {
+			agg.name = aggName(field.Alias)
+		}
 
 		switch fn.Name {
 		case "avg":
@@ -272,6 +345,7 @@ func (s *SelectStatement) metricAggs() Aggs {
 		case "count":
 			agg.typ = ValueCount
 			if fn.Args[0].String() == "*" {
+				agg.typ = StarCount
 				agg.params["field"] = ""
 			} else {
 				agg.params["script"] = fn.Args[0].String()
