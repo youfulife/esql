@@ -406,6 +406,9 @@ type SelectStatement struct {
 	// Expressions used for grouping the selection.
 	Dimensions Dimensions
 
+	// Expressions used for filter grouping buckets.
+	Having Expr
+
 	// Data sources that fields are extracted from.
 	Sources Sources
 
@@ -766,6 +769,11 @@ func (s *SelectStatement) String() string {
 		_, _ = buf.WriteString(" GROUP BY ")
 		_, _ = buf.WriteString(s.Dimensions.String())
 	}
+	if s.Having != nil {
+		_, _ = buf.WriteString(" HAVING ")
+		_, _ = buf.WriteString(s.Having.String())
+	}
+
 	switch s.Fill {
 	case NoFill:
 		_, _ = buf.WriteString(" fill(none)")
@@ -1134,6 +1142,15 @@ func (s *SelectStatement) NamesInWhere() []string {
 	var a []string
 	if s.Condition != nil {
 		a = walkNames(s.Condition)
+	}
+	return a
+}
+
+// NamesInHaving returns the field and tag names (idents) referenced in the having clause
+func (s *SelectStatement) NamesInHaving() []string {
+	var a []string
+	if s.Having != nil {
+		a = walkNames(s.Having)
 	}
 	return a
 }
@@ -1856,10 +1873,6 @@ type Wildcard struct {
 // String returns a string representation of the wildcard.
 func (e *Wildcard) String() string {
 	switch e.Type {
-	case FIELD:
-		return "*::field"
-	case TAG:
-		return "*::tag"
 	default:
 		return "*"
 	}

@@ -154,26 +154,6 @@ func (p *Parser) parseUInt64() (uint64, error) {
 	return uint64(n), nil
 }
 
-// parseDuration parses a string and returns a duration literal.
-// This function assumes the DURATION token has already been consumed.
-func (p *Parser) parseDuration() (time.Duration, error) {
-	tok, pos, lit := p.scanIgnoreWhitespace()
-	if tok != DURATIONVAL && tok != INF {
-		return 0, newParseError(tokstr(tok, lit), []string{"duration"}, pos)
-	}
-
-	if tok == INF {
-		return 0, nil
-	}
-
-	d, err := ParseDuration(lit)
-	if err != nil {
-		return 0, &ParseError{Message: err.Error(), Pos: pos}
-	}
-
-	return d, nil
-}
-
 // parseIdent parses an identifier.
 func (p *Parser) parseIdent() (string, error) {
 	tok, pos, lit := p.scanIgnoreWhitespace()
@@ -296,11 +276,6 @@ func (p *Parser) parseSelectStatement(tr targetRequirement) (*SelectStatement, e
 		return nil, err
 	}
 
-	// Parse target: "INTO"
-	if stmt.Target, err = p.parseTarget(tr); err != nil {
-		return nil, err
-	}
-
 	// Parse source: "FROM".
 	if stmt.Sources, err = p.parseSources(); err != nil {
 		return nil, err
@@ -316,6 +291,11 @@ func (p *Parser) parseSelectStatement(tr targetRequirement) (*SelectStatement, e
 		return nil, err
 	}
 
+	// Parse having: "HAVING EXPR".
+	if stmt.Having, err = p.parseHaving(); err != nil {
+		return nil, err
+	}
+
 	// Parse fill options: "fill(<option>)"
 	if stmt.Fill, stmt.FillValue, err = p.parseFill(); err != nil {
 		return nil, err
@@ -328,21 +308,6 @@ func (p *Parser) parseSelectStatement(tr targetRequirement) (*SelectStatement, e
 
 	// Parse limit: "LIMIT <n>".
 	if stmt.Limit, err = p.parseOptionalTokenAndInt(LIMIT); err != nil {
-		return nil, err
-	}
-
-	// Parse offset: "OFFSET <n>".
-	if stmt.Offset, err = p.parseOptionalTokenAndInt(OFFSET); err != nil {
-		return nil, err
-	}
-
-	// Parse series limit: "SLIMIT <n>".
-	if stmt.SLimit, err = p.parseOptionalTokenAndInt(SLIMIT); err != nil {
-		return nil, err
-	}
-
-	// Parse series offset: "SOFFSET <n>".
-	if stmt.SOffset, err = p.parseOptionalTokenAndInt(SOFFSET); err != nil {
 		return nil, err
 	}
 
@@ -371,13 +336,9 @@ const (
 
 // parseTarget parses a string and returns a Target.
 func (p *Parser) parseTarget(tr targetRequirement) (*Target, error) {
-	if tok, pos, lit := p.scanIgnoreWhitespace(); tok != INTO {
-		if tr == targetRequired {
-			return nil, newParseError(tokstr(tok, lit), []string{"INTO"}, pos)
-		}
-		p.unscan()
-		return nil, nil
-	}
+
+	p.scanIgnoreWhitespace()
+	p.unscan()
 
 	// db, rp, and / or measurement
 	idents, err := p.parseSegmentedIdents()
@@ -388,7 +349,7 @@ func (p *Parser) parseTarget(tr targetRequirement) (*Target, error) {
 	if len(idents) < 3 {
 		// Check for source measurement reference.
 		if ch := p.peekRune(); ch == ':' {
-			if err := p.parseTokens([]Token{COLON, MEASUREMENT}); err != nil {
+			if err := p.parseTokens([]Token{COLON}); err != nil {
 				return nil, err
 			}
 			// Append empty measurement name.
@@ -676,6 +637,23 @@ func (p *Parser) parseDimension() (*Dimension, error) {
 	return &Dimension{Expr: expr, Alias: alias}, nil
 }
 
+// parseHaving parses the "HAVING" clause of the query, if it exists.
+func (p *Parser) parseHaving() (Expr, error) {
+	// Check if the WHERE token exists.
+	if tok, _, _ := p.scanIgnoreWhitespace(); tok != HAVING {
+		p.unscan()
+		return nil, nil
+	}
+
+	// Scan the identifier for the source.
+	expr, err := p.ParseExpr()
+	if err != nil {
+		return nil, err
+	}
+
+	return expr, nil
+}
+
 // parseFill parses the fill call and its options.
 func (p *Parser) parseFill() (FillOption, interface{}, error) {
 	// Parse the expression first.
@@ -854,10 +832,6 @@ func (p *Parser) parseVarRef() (*VarRef, error) {
 			default:
 				return nil, newParseError(tokstr(tok, lit), []string{"float", "integer", "string", "boolean", "field", "tag"}, pos)
 			}
-		case FIELD:
-			dtype = AnyField
-		case TAG:
-			dtype = Tag
 		default:
 			return nil, newParseError(tokstr(tok, lit), []string{"float", "integer", "string", "boolean", "field", "tag"}, pos)
 		}
@@ -1000,8 +974,6 @@ func (p *Parser) parseUnaryExpr() (Expr, error) {
 		if tok, _, _ := p.scan(); tok == DOUBLECOLON {
 			tok, pos, lit := p.scan()
 			switch tok {
-			case FIELD, TAG:
-				wc.Type = tok
 			default:
 				return nil, newParseError(tokstr(tok, lit), []string{"field", "tag"}, pos)
 			}
@@ -1132,47 +1104,6 @@ func (p *Parser) parseCall(name string) (*Call, error) {
 	}
 
 	return &Call{Name: name, Args: args}, nil
-}
-
-// parseResample parses a RESAMPLE [EVERY <duration>] [FOR <duration>].
-// This function assumes RESAMPLE has already been consumed.
-// EVERY and FOR are optional, but at least one of the two has to be used.
-func (p *Parser) parseResample() (time.Duration, time.Duration, error) {
-	var interval time.Duration
-	if p.parseTokenMaybe(EVERY) {
-		tok, pos, lit := p.scanIgnoreWhitespace()
-		if tok != DURATIONVAL {
-			return 0, 0, newParseError(tokstr(tok, lit), []string{"duration"}, pos)
-		}
-
-		d, err := ParseDuration(lit)
-		if err != nil {
-			return 0, 0, &ParseError{Message: err.Error(), Pos: pos}
-		}
-		interval = d
-	}
-
-	var maxDuration time.Duration
-	if p.parseTokenMaybe(FOR) {
-		tok, pos, lit := p.scanIgnoreWhitespace()
-		if tok != DURATIONVAL {
-			return 0, 0, newParseError(tokstr(tok, lit), []string{"duration"}, pos)
-		}
-
-		d, err := ParseDuration(lit)
-		if err != nil {
-			return 0, 0, &ParseError{Message: err.Error(), Pos: pos}
-		}
-		maxDuration = d
-	}
-
-	// Neither EVERY or FOR were read, so read the next token again
-	// so we can return a suitable error message.
-	if interval == 0 && maxDuration == 0 {
-		tok, pos, lit := p.scanIgnoreWhitespace()
-		return 0, 0, newParseError(tokstr(tok, lit), []string{"EVERY", "FOR"}, pos)
-	}
-	return interval, maxDuration, nil
 }
 
 // scan returns the next token from the underlying scanner.

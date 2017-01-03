@@ -61,77 +61,19 @@ const (
 
 	keywordBeg
 	// ALL and the following are InfluxQL Keywords
-	ALL
-	ALTER
-	ANY
 	AS
 	ASC
-	BEGIN
 	BY
-	CREATE
-	CONTINUOUS
-	DATABASE
-	DATABASES
-	DEFAULT
-	DELETE
 	DESC
-	DESTINATIONS
-	DIAGNOSTICS
 	DISTINCT
-	DROP
-	DURATION
-	END
-	EVERY
-	EXPLAIN
-	FIELD
-	FOR
 	FROM
-	GRANT
-	GRANTS
 	GROUP
-	GROUPS
+	HAVING
 	IN
-	INF
-	INSERT
-	INTO
-	KEY
-	KEYS
-	KILL
 	LIMIT
-	MEASUREMENT
-	MEASUREMENTS
-	OFFSET
-	ON
 	ORDER
-	PASSWORD
-	POLICY
-	POLICIES
-	PRIVILEGES
-	QUERIES
-	QUERY
-	READ
-	REPLICATION
-	RESAMPLE
-	RETENTION
-	REVOKE
 	SELECT
-	SERIES
-	SET
-	SHOW
-	SHARD
-	SHARDS
-	SLIMIT
-	SOFFSET
-	SUBSCRIPTION
-	SUBSCRIPTIONS
-	TAG
-	TO
-	USER
-	USERS
-	VALUES
 	WHERE
-	WITH
-	WRITE
 	keywordEnd
 )
 
@@ -176,77 +118,19 @@ var tokens = [...]string{
 	SEMICOLON:   ";",
 	DOT:         ".",
 
-	ALL:           "ALL",
-	ALTER:         "ALTER",
-	ANY:           "ANY",
-	AS:            "AS",
-	ASC:           "ASC",
-	BEGIN:         "BEGIN",
-	BY:            "BY",
-	CREATE:        "CREATE",
-	CONTINUOUS:    "CONTINUOUS",
-	DATABASE:      "DATABASE",
-	DATABASES:     "DATABASES",
-	DEFAULT:       "DEFAULT",
-	DELETE:        "DELETE",
-	DESC:          "DESC",
-	DESTINATIONS:  "DESTINATIONS",
-	DIAGNOSTICS:   "DIAGNOSTICS",
-	DISTINCT:      "DISTINCT",
-	DROP:          "DROP",
-	DURATION:      "DURATION",
-	END:           "END",
-	EVERY:         "EVERY",
-	EXPLAIN:       "EXPLAIN",
-	FIELD:         "FIELD",
-	FOR:           "FOR",
-	FROM:          "FROM",
-	GRANT:         "GRANT",
-	GRANTS:        "GRANTS",
-	GROUP:         "GROUP",
-	GROUPS:        "GROUPS",
-	IN:            "IN",
-	INF:           "INF",
-	INSERT:        "INSERT",
-	INTO:          "INTO",
-	KEY:           "KEY",
-	KEYS:          "KEYS",
-	KILL:          "KILL",
-	LIMIT:         "LIMIT",
-	MEASUREMENT:   "MEASUREMENT",
-	MEASUREMENTS:  "MEASUREMENTS",
-	OFFSET:        "OFFSET",
-	ON:            "ON",
-	ORDER:         "ORDER",
-	PASSWORD:      "PASSWORD",
-	POLICY:        "POLICY",
-	POLICIES:      "POLICIES",
-	PRIVILEGES:    "PRIVILEGES",
-	QUERIES:       "QUERIES",
-	QUERY:         "QUERY",
-	READ:          "READ",
-	REPLICATION:   "REPLICATION",
-	RESAMPLE:      "RESAMPLE",
-	RETENTION:     "RETENTION",
-	REVOKE:        "REVOKE",
-	SELECT:        "SELECT",
-	SERIES:        "SERIES",
-	SET:           "SET",
-	SHOW:          "SHOW",
-	SHARD:         "SHARD",
-	SHARDS:        "SHARDS",
-	SLIMIT:        "SLIMIT",
-	SOFFSET:       "SOFFSET",
-	SUBSCRIPTION:  "SUBSCRIPTION",
-	SUBSCRIPTIONS: "SUBSCRIPTIONS",
-	TAG:           "TAG",
-	TO:            "TO",
-	USER:          "USER",
-	USERS:         "USERS",
-	VALUES:        "VALUES",
-	WHERE:         "WHERE",
-	WITH:          "WITH",
-	WRITE:         "WRITE",
+	AS:       "AS",
+	ASC:      "ASC",
+	BY:       "BY",
+	DESC:     "DESC",
+	DISTINCT: "DISTINCT",
+	FROM:     "FROM",
+	GROUP:    "GROUP",
+	HAVING:   "HAVING",
+	IN:       "IN",
+	LIMIT:    "LIMIT",
+	ORDER:    "ORDER",
+	SELECT:   "SELECT",
+	WHERE:    "WHERE",
 }
 
 var keywords map[string]Token

@@ -55,6 +55,11 @@ const (
 	Terms
 
 	bucketEnd
+
+	pipelineBegin
+	BucketScript
+	BucketSelector
+	pipelineEnd
 )
 
 var aggs = [...]string{
@@ -91,6 +96,9 @@ var aggs = [...]string{
 	Sampler:          "sampler",
 	SignificantTerms: "significant_terms",
 	Terms:            "terms",
+
+	BucketScript:   "bucket_script",
+	BucketSelector: "bucket_selector",
 }
 
 type Agg struct {
@@ -116,7 +124,7 @@ func (s *SelectStatement) isGroupBySort(f string) bool {
 	return false
 }
 
-func (s *SelectStatement) isStarCountSort(f string) bool {
+func (s *SelectStatement) isStarCount(f string) bool {
 	for _, field := range s.Fields {
 		fn, ok := field.Expr.(*Call)
 		if !ok {
@@ -138,7 +146,7 @@ func (s *SelectStatement) orders() []map[string]string {
 		if s.isGroupBySort(sf.Name) {
 			sf.Name = "_term"
 		}
-		if s.isStarCountSort(sf.Name) {
+		if s.isStarCount(sf.Name) {
 			sf.Name = "_count"
 		}
 		m := make(map[string]string)
@@ -197,10 +205,10 @@ func (s *SelectStatement) EsDsl() string {
 	}
 	js.SetPath(branch, fieldFilters)
 
-	// build aggregates
+	// build Aggregations
 	path := []string{"aggs"}
-	//bucket aggregates
-	baggs := s.bucketAggregates()
+	//bucket Aggregations
+	baggs := s.bucketAggregations()
 	for _, a := range baggs {
 		_path := append(path, []string{a.name, aggs[a.typ]}...)
 		js.SetPath(_path, a.params)
@@ -210,7 +218,7 @@ func (s *SelectStatement) EsDsl() string {
 		// }
 		path = append(path, a.name, "aggs")
 	}
-	//metric aggregates
+	//metric Aggregations
 	maggs := s.metricAggs()
 	for _, a := range maggs {
 		if a.typ == StarCount {
@@ -244,7 +252,43 @@ func aggName(s string) string {
 	return l[0]
 }
 
-func (s *SelectStatement) bucketAggregates() Aggs {
+// replace all doc['xxx'].value to xxx
+func cleanDocString(s string) string {
+	reg := regexp.MustCompile(`doc\['(.+?)'\]\.value`)
+	l := reg.ReplaceAllString(s, "$1")
+	return l
+}
+
+func (s *SelectStatement) pipelineAggregation() *Agg {
+	if s.Having == nil {
+		return nil
+	}
+	fieldAsNames := s.Fields.AliasNames()
+	havingNames := s.NamesInHaving()
+	fmt.Println("fieldAsNames: ", fieldAsNames)
+	fmt.Println("having: ", havingNames)
+	agg := &Agg{}
+	agg.name = "having"
+	agg.typ = BucketSelector
+	agg.params = make(map[string]interface{})
+	sm := make(map[string]string)
+	sm["lang"] = "expression"
+	sm["inline"] = cleanDocString(s.Having.String())
+	agg.params["script"] = sm
+	bm := make(map[string]string)
+	for _, name := range havingNames {
+		if s.isStarCount(name) {
+			bm[name] = "_count"
+			continue
+		}
+		bm[name] = name
+	}
+	agg.params["buckets_path"] = bm
+
+	return agg
+}
+
+func (s *SelectStatement) bucketAggregations() Aggs {
 	var aggs Aggs
 	for _, dim := range s.Dimensions {
 		agg := &Agg{}
@@ -385,6 +429,11 @@ func (s *SelectStatement) metricAggs() Aggs {
 		}
 
 		aggs = append(aggs, agg)
+	}
+	//append pipeline aggregation
+	pipeAgg := s.pipelineAggregation()
+	if pipeAgg != nil {
+		aggs = append(aggs, pipeAgg)
 	}
 
 	return aggs
