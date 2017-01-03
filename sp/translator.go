@@ -113,9 +113,9 @@ func (s *SelectStatement) isGroupBySort(f string) bool {
 	for _, d := range s.Dimensions {
 		var _s string
 		if d.Alias == "" {
-			_s = aggName(d.String())
+			_s = cleanDocString(d.String())
 		} else {
-			_s = aggName(d.Alias)
+			_s = cleanDocString(d.Alias)
 		}
 		if _s == f {
 			return true
@@ -239,19 +239,6 @@ func (s *SelectStatement) EsDsl() string {
 	return string(_s)
 }
 
-// todo: replace all doc['xxx'].value to xxx
-func aggName(s string) string {
-	reg := regexp.MustCompile(`\['(.+)'\]`)
-	l := reg.FindStringSubmatch(s)
-	if len(l) == 0 {
-		return s
-	}
-	if len(l) > 1 {
-		return l[1]
-	}
-	return l[0]
-}
-
 // replace all doc['xxx'].value to xxx
 func cleanDocString(s string) string {
 	reg := regexp.MustCompile(`doc\['(.+?)'\]\.value`)
@@ -294,9 +281,9 @@ func (s *SelectStatement) bucketAggregations() Aggs {
 		agg := &Agg{}
 		agg.params = make(map[string]interface{})
 		if dim.Alias == "" {
-			agg.name = aggName(dim.String())
+			agg.name = cleanDocString(dim.String())
 		} else {
-			agg.name = aggName(dim.Alias)
+			agg.name = cleanDocString(dim.Alias)
 		}
 
 		switch expr := dim.Expr.(type) {
@@ -309,7 +296,7 @@ func (s *SelectStatement) bucketAggregations() Aggs {
 				case *BinaryExpr:
 					agg.params["script"] = arg0.String()
 				default:
-					agg.params["field"] = aggName(arg0.String())
+					agg.params["field"] = cleanDocString(arg0.String())
 				}
 				agg.params["keyed"] = true
 				ranges := make([]map[string]string, 0, len(expr.Args))
@@ -330,7 +317,7 @@ func (s *SelectStatement) bucketAggregations() Aggs {
 			case "histogram":
 
 				agg.typ = Histogram
-				agg.params["field"] = aggName(expr.Args[0].String())
+				agg.params["field"] = cleanDocString(expr.Args[0].String())
 				agg.params["interval"] = expr.Args[1].String()
 				agg.params["min_doc_count"] = 0
 				// agg.params["min"] = expr.Args[2].String()
@@ -361,7 +348,7 @@ func (s *SelectStatement) bucketAggregations() Aggs {
 			case *BinaryExpr:
 				agg.params["script"] = term.String()
 			default:
-				agg.params["field"] = aggName(term.String())
+				agg.params["field"] = cleanDocString(term.String())
 			}
 			//order
 			if len(s.SortFields) > 0 {
@@ -385,9 +372,9 @@ func (s *SelectStatement) metricAggs() Aggs {
 		agg := &Agg{}
 		agg.params = make(map[string]interface{})
 		if field.Alias == "" {
-			agg.name = fmt.Sprintf(`%s(%s)`, fn.Name, aggName(fn.Args[0].String()))
+			agg.name = fmt.Sprintf(`%s(%s)`, fn.Name, cleanDocString(fn.Args[0].String()))
 		} else {
-			agg.name = aggName(field.Alias)
+			agg.name = cleanDocString(field.Alias)
 		}
 
 		switch fn.Name {
