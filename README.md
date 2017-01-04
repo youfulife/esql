@@ -32,7 +32,9 @@ Convert sql to elastic search DSL
 "SELECT ipo_year, COUNT(*) AS ipo_count FROM symbol GROUP BY ipo_year HAVING ipo_count > 200"
 "SELECT ipo_year, COUNT(*) AS ipo_count, MAX(last_sale) AS max_last_sale FROM symbol GROUP BY ipo_year HAVING ipo_count > 100 AND max_last_sale <= 10000"
 "select exchange, sum(ipo_year+last_sale) from symbol group by exchange"
-
+"select exchange, sum(ipo_year), sum(ipo_year)/sum(last_sale) AS yyyy from symbol group by exchange"
+"select exchange, sum(ipo_year), sum(ipo_year*2)/sum(last_sale) AS yyyy from symbol group by exchange"
+"select exchange, sum(ipo_year), sum(ipo_year+last_sale)/sum(last_sale) AS yyyy from symbol group by exchange"
 ```
 # Todo
 ```

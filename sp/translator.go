@@ -242,11 +242,11 @@ func (s *SelectStatement) EsDsl() string {
 // replace all doc['xxx'].value to xxx
 func cleanDocString(s string) string {
 	reg := regexp.MustCompile(`doc\['(.+?)'\]\.value`)
-	l := reg.ReplaceAllString(s, "$1")
+	l := reg.ReplaceAllString(s, "${1}")
 	return l
 }
 
-func (s *SelectStatement) pipelineAggregation() *Agg {
+func (s *SelectStatement) BucketSelectorAggregation() *Agg {
 	if s.Having == nil {
 		return nil
 	}
@@ -362,6 +362,75 @@ func (s *SelectStatement) bucketAggregations() Aggs {
 	return aggs
 }
 
+// bucketFunctionCalls walks the Field of function calls expr
+func bucketFunctionCalls(exp Expr) []*Call {
+	switch expr := exp.(type) {
+	case *VarRef:
+		return nil
+	case *Call:
+		return []*Call{expr}
+	case *BinaryExpr:
+		var ret []*Call
+		ret = append(ret, bucketFunctionCalls(expr.LHS)...)
+		ret = append(ret, bucketFunctionCalls(expr.RHS)...)
+		return ret
+	case *ParenExpr:
+		return bucketFunctionCalls(expr.Expr)
+	}
+
+	return nil
+}
+
+func (s *SelectStatement) bucketScriptAggs() Aggs {
+	fmt.Println("fc: ", s.FunctionCalls())
+	var aggs Aggs
+	for _, f := range s.Fields {
+		calls := bucketFunctionCalls(f.Expr)
+		if len(calls) < 2 {
+			continue
+		}
+		bucketsPath := make(map[string]string)
+		inlineExpr := cleanDocString(f.Expr.String())
+
+		for i, fn := range calls {
+			agg := &Agg{}
+			agg.params = make(map[string]interface{})
+			agg.name = fmt.Sprintf(`%s(%s)`, fn.Name, cleanDocString(fn.Args[0].String()))
+			switch fn.Name {
+			case "sum":
+				agg.typ = Sum
+				agg.params["script"] = fn.Args[0].String()
+			default:
+				panic(fmt.Errorf("not support agg aggregation"))
+			}
+			path := fmt.Sprintf("path%d", i)
+			bucketsPath[path] = agg.name
+			//todo: ugly, should use walk tree method
+			inlineExpr = strings.Replace(inlineExpr, agg.name, path, -1)
+
+			aggs = append(aggs, agg)
+		}
+
+		agg := &Agg{}
+		agg.params = make(map[string]interface{})
+		agg.typ = BucketScript
+		if f.Alias == "" {
+			agg.name = cleanDocString(f.String())
+		} else {
+			agg.name = cleanDocString(f.Alias)
+		}
+		sm := make(map[string]string)
+		sm["lang"] = "expression"
+		sm["inline"] = inlineExpr
+		agg.params["script"] = sm
+		agg.params["buckets_path"] = bucketsPath
+
+		aggs = append(aggs, agg)
+
+	}
+	return aggs
+}
+
 func (s *SelectStatement) metricAggs() Aggs {
 	var aggs Aggs
 	for _, field := range s.Fields {
@@ -417,8 +486,11 @@ func (s *SelectStatement) metricAggs() Aggs {
 
 		aggs = append(aggs, agg)
 	}
-	//append pipeline aggregation
-	pipeAgg := s.pipelineAggregation()
+
+	//append bucket script aggregation
+	aggs = append(aggs, s.bucketScriptAggs()...)
+	//append bucket selector aggregation
+	pipeAgg := s.BucketSelectorAggregation()
 	if pipeAgg != nil {
 		aggs = append(aggs, pipeAgg)
 	}
