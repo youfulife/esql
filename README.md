@@ -38,6 +38,8 @@ Convert sql to elastic search DSL
 ```
 # Todo
 ```
+//filter aggregation
+"select sum(market_cap, "exchange=='nyse'") from symbol where ipo_year=1998"
 "select * from symbol WHERE symbol LIKE 'AAP%'"
 "SELECT ipo_year_range, MAX(market_cap) AS max_market_cap FROM symbol GROUP BY histogram(ipo_year, 10) AS ipo_year_range ORDER BY ipo_year_range"
 

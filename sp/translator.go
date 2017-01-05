@@ -195,15 +195,17 @@ func (s *SelectStatement) EsDsl() string {
 	}
 	fields := s.NamesInDimension()
 	// fmt.Println(fields)
-	fieldFilters := make([]map[string]interface{}, 0)
-	branch := []string{"query", "bool", "filter", "and"}
-	for _, f := range fields {
-		_js := simplejson.New()
-		existsBranch := []string{"exists", "field"}
-		_js.SetPath(existsBranch, f)
-		fieldFilters = append(fieldFilters, _js.MustMap())
+	if len(fields) > 0 {
+		fieldFilters := make([]map[string]interface{}, 0)
+		branch := []string{"query", "bool", "filter", "and"}
+		for _, f := range fields {
+			_js := simplejson.New()
+			existsBranch := []string{"exists", "field"}
+			_js.SetPath(existsBranch, f)
+			fieldFilters = append(fieldFilters, _js.MustMap())
+		}
+		js.SetPath(branch, fieldFilters)
 	}
-	js.SetPath(branch, fieldFilters)
 
 	// build Aggregations
 	path := []string{"aggs"}
