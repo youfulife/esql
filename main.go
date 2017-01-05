@@ -6,9 +6,8 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/bitly/go-simplejson"
 	"github.com/chenyoufu/esql/g"
-	"github.com/chenyoufu/esql/sp"
+	"github.com/chenyoufu/esql/serv"
 )
 
 func main() {
@@ -16,6 +15,7 @@ func main() {
 
 	cfg := flag.String("c", "cfg.json", "configuration file")
 	version := flag.Bool("v", false, "show version")
+	pretty := flag.Bool("p", false, "show pretty")
 	sql := flag.String("s", "", "sql select statement")
 	flag.Parse()
 
@@ -24,27 +24,17 @@ func main() {
 		os.Exit(0)
 	}
 
-	if len(*sql) == 0 {
+	if len(*sql) != 0 {
+		s := serv.CmdTranslator(*sql, *pretty)
+		fmt.Println(s)
 		os.Exit(0)
 	}
 
 	g.ParseConfig(*cfg)
 	fmt.Println(g.Config())
 
-	stmt, err := sp.ParseStatement(*sql)
-	if err != nil {
-		panic(err)
-	}
-	selectStmt, ok := stmt.(*sp.SelectStatement)
-	if !ok {
-		panic("Not support stmt")
-	}
-	fmt.Println(selectStmt)
+	go serv.Start()
 
-	fmt.Println(selectStmt.EsDsl())
-
-	js := simplejson.New()
-	js.Set("xx", "yy")
-	fmt.Println(js)
+	select {}
 
 }

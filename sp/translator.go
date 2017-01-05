@@ -1,7 +1,6 @@
 package sp
 
 import (
-	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -161,7 +160,16 @@ func (s *SelectStatement) orders() []map[string]string {
 }
 
 //EsDsl return dsl json string
-func (s *SelectStatement) EsDsl() string {
+func EsDsl(sql string) (string, error) {
+
+	stmt, err := ParseStatement(sql)
+	if err != nil {
+		return "", err
+	}
+	s, ok := stmt.(*SelectStatement)
+	if !ok {
+		return "", fmt.Errorf("only support select")
+	}
 
 	js := simplejson.New()
 
@@ -233,12 +241,12 @@ func (s *SelectStatement) EsDsl() string {
 
 	_s, err := js.MarshalJSON()
 	if err != nil {
-		return ""
+		return "", err
 	}
-	t, _ := json.MarshalIndent(js.MustMap(), "", "  ")
-	fmt.Println(string(t))
+	// t, _ := json.MarshalIndent(js.MustMap(), "", "  ")
+	// fmt.Println(string(t))
 
-	return string(_s)
+	return string(_s), nil
 }
 
 // replace all doc['xxx'].value to xxx
@@ -252,10 +260,8 @@ func (s *SelectStatement) BucketSelectorAggregation() *Agg {
 	if s.Having == nil {
 		return nil
 	}
-	fieldAsNames := s.Fields.AliasNames()
+	// fieldAsNames := s.Fields.AliasNames()
 	havingNames := s.NamesInHaving()
-	fmt.Println("fieldAsNames: ", fieldAsNames)
-	fmt.Println("having: ", havingNames)
 	agg := &Agg{}
 	agg.name = "having"
 	agg.typ = BucketSelector
@@ -384,7 +390,6 @@ func bucketFunctionCalls(exp Expr) []*Call {
 }
 
 func (s *SelectStatement) bucketScriptAggs() Aggs {
-	fmt.Println("fc: ", s.FunctionCalls())
 	var aggs Aggs
 	for _, f := range s.Fields {
 		calls := bucketFunctionCalls(f.Expr)

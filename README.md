@@ -1,7 +1,76 @@
 # esql
 Convert sql to elastic search DSL
 
-# 已经支持
+Here are currently being developed!!!
+
+# Usage
+
+### build and running
+```
+# set $GOPATH and $GOROOT
+mkdir -p $GOPATH/src/github.com/chenyoufu
+cd $GOPATH/src/github.com/chenyoufu
+git clone https://github.com/chenyoufu/esql.git
+cd esql
+go get ./...
+go build .
+./esql
+```
+
+#### Using httpie
+```
+> http "127.0.0.1:1234?sql=select sum(market_cap) from symbol where ipo_year=1998"
+```
+output
+```
+HTTP/1.1 200 OK
+Content-Length: 254
+Content-Type: application/json; charset=UTF-8
+Date: Thu, 05 Jan 2017 08:50:03 GMT
+
+{
+    "dsl": {
+        "aggs": {
+            "sum(market_cap)": {
+                "sum": {
+                    "script": "doc['market_cap'].value"
+                }
+            }
+        },
+        "from": 0,
+        "query": {
+            "bool": {
+                "filter": {
+                    "script": {
+                        "script": "doc['ipo_year'].value == 1998"
+                    }
+                }
+            }
+        },
+        "size": 0,
+        "sort": []
+    },
+    "sql": "select sum(market_cap) from symbol where ipo_year=1998"
+}
+```
+
+### One time translation
+```
+./esql -s "select sum(market_cap) from symbol where ipo_year=1998" -p
+```
+### help
+```
+Usage of ./esql:
+  -c string
+    	configuration file (default "cfg.json")
+  -p	show pretty
+  -s string
+    	sql select statement
+  -v	show version
+```
+
+
+# Supported
 ```
 "select exchange, max(market_cap) from symbol group by exchange"
 "select * from symbol where exchange='nyse' limit 1"
