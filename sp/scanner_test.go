@@ -8,6 +8,14 @@ import (
 	"github.com/chenyoufu/esql/sp"
 )
 
+// errstring converts an error to its string representation.
+func errstring(err error) string {
+	if err != nil {
+		return err.Error()
+	}
+	return ""
+}
+
 // Ensure the scanner can scan tokens correctly.
 func TestScanner_Scan(t *testing.T) {
 	var tests = []struct {
@@ -53,30 +61,26 @@ func TestScanner_Scan(t *testing.T) {
 		{s: `(`, tok: sp.LPAREN},
 		{s: `)`, tok: sp.RPAREN},
 		{s: `,`, tok: sp.COMMA},
-		{s: `;`, tok: sp.SEMICOLON},
 		{s: `.`, tok: sp.DOT},
 		{s: `=~`, tok: sp.EQREGEX},
 		{s: `!~`, tok: sp.NEQREGEX},
-		{s: `:`, tok: sp.COLON},
-		{s: `::`, tok: sp.DOUBLECOLON},
 
 		// Identifiers
 		{s: `foo`, tok: sp.IDENT, lit: `foo`},
 		{s: `_foo`, tok: sp.IDENT, lit: `_foo`},
+		{s: `@foo`, tok: sp.IDENT, lit: `@foo`},
 		{s: `Zx12_3U_-`, tok: sp.IDENT, lit: `Zx12_3U_`},
-		{s: `"foo"`, tok: sp.IDENT, lit: `foo`},
-		{s: `"foo\\bar"`, tok: sp.IDENT, lit: `foo\bar`},
-		{s: `"foo\bar"`, tok: sp.BADESCAPE, lit: `\b`, pos: sp.Pos{Line: 0, Char: 5}},
-		{s: `"foo\"bar\""`, tok: sp.IDENT, lit: `foo"bar"`},
 		{s: `test"`, tok: sp.BADSTRING, lit: "", pos: sp.Pos{Line: 0, Char: 3}},
 		{s: `"test`, tok: sp.BADSTRING, lit: `test`},
-		{s: `$host`, tok: sp.BOUNDPARAM, lit: `$host`},
-		{s: `$"host param"`, tok: sp.BOUNDPARAM, lit: `$host param`},
 
 		{s: `true`, tok: sp.TRUE},
 		{s: `false`, tok: sp.FALSE},
 
 		// Strings
+		{s: `"foo"`, tok: sp.STRING, lit: `foo`},
+		{s: `"foo\\bar"`, tok: sp.STRING, lit: `foo\bar`},
+		{s: `"foo\bar"`, tok: sp.BADESCAPE, lit: `\b`, pos: sp.Pos{Line: 0, Char: 5}},
+		{s: `"foo\"bar\""`, tok: sp.STRING, lit: `foo"bar"`},
 		{s: `'testing 123!'`, tok: sp.STRING, lit: `testing 123!`},
 		{s: `'foo\nbar'`, tok: sp.STRING, lit: "foo\nbar"},
 		{s: `'foo\\bar'`, tok: sp.STRING, lit: "foo\\bar"},
@@ -86,6 +90,8 @@ func TestScanner_Scan(t *testing.T) {
 
 		// Numbers
 		{s: `100`, tok: sp.INTEGER, lit: `100`},
+		{s: `+100`, tok: sp.INTEGER, lit: `+100`},
+		{s: `-100`, tok: sp.INTEGER, lit: `-100`},
 		{s: `10.3s`, tok: sp.NUMBER, lit: `10.3`},
 		// Keywords
 		{s: `AS`, tok: sp.AS},
@@ -223,12 +229,4 @@ func TestScanRegex(t *testing.T) {
 			t.Errorf("%d. %s: error:\n\texp=%s\n\tgot=%s\n", i, tt.in, tt.lit, lit)
 		}
 	}
-}
-
-// errstring converts an error to its string representation.
-func errstring(err error) string {
-	if err != nil {
-		return err.Error()
-	}
-	return ""
 }

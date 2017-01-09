@@ -73,6 +73,9 @@ Usage of ./esql:
 # Supported
 ```
 "select exchange, max(market_cap) from symbol group by exchange"
+```
+# Todo
+```
 "select * from symbol where exchange='nyse' limit 1"
 "select * from symbol where exchange='nyse' and sector='Technology' limit 1"
 "select * from symbol where last_sale > 985 limit 1"
@@ -104,12 +107,201 @@ Usage of ./esql:
 "select exchange, sum(ipo_year), sum(ipo_year)/sum(last_sale) AS yyyy from symbol group by exchange"
 "select exchange, sum(ipo_year), sum(ipo_year*2)/sum(last_sale) AS yyyy from symbol group by exchange"
 "select exchange, sum(ipo_year), sum(ipo_year+last_sale)/sum(last_sale) AS yyyy from symbol group by exchange"
-```
-# Todo
-```
+
 //filter aggregation
 "select sum(market_cap, "exchange=='nyse'") from symbol where ipo_year=1998"
 "select * from symbol WHERE symbol LIKE 'AAP%'"
 "SELECT ipo_year_range, MAX(market_cap) AS max_market_cap FROM symbol GROUP BY histogram(ipo_year, 10) AS ipo_year_range ORDER BY ipo_year_range"
 
+```
+
+# BUG
+```
+"select sum(market_cap)+1 from symbol where ipo_year=1998"
+```
+
+# SQL
+
+## Notation
+The syntax is specified using Extended Backus-Naur Form ("EBNF").
+
+Notation operators in order of increasing precedence:
+
+```
+|   alternation
+()  grouping
+[]  option (0 or 1 times)
+{}  repetition (0 to n times)
+```
+
+## Query representation
+
+### Characters
+
+Jepl is Unicode text encoded in [UTF-8](http://en.wikipedia.org/wiki/UTF-8).
+
+```
+newline             = /* the Unicode code point U+000A */ .
+unicode_char        = /* an arbitrary Unicode code point except newline */ .
+```
+
+## Letters and digits
+
+Letters are the set of ASCII characters plus the underscore character _ (U+005F)
+is considered a letter.
+
+Only decimal digits are supported.
+
+```
+letter              = ascii_letter | "_" .
+ascii_letter        = "A" … "Z" | "a" … "z" .
+digit               = "0" … "9" .
+```
+
+## Identifiers
+
+Identifiers are tokens which refer to topic names, field keys.
+
+The rules:
+
+- must start with an upper or lowercase ASCII character or "_"
+- may contain only ASCII letters, decimal digits, and "_"
+
+```
+identifier          = ( letter ) { letter | digit }
+```
+
+#### Examples:
+
+```
+cpu
+_cpu_stats
+```
+
+## Keywords
+
+```
+ALL           AS            NI         IN
+SELECT        WHERE         FROM       AND
+OR
+```
+
+## Literals
+
+### Integers
+
+Jepl supports decimal integer literals.  Hexadecimal and octal literals are not currently supported.
+
+```
+int_lit             = ( "1" … "9" ) { digit }
+```
+
+### Floats
+
+Jepl supports floating-point literals.  Exponents are not currently supported.
+
+```
+float_lit           = int_lit "." int_lit
+```
+
+### Strings
+
+String literals must be surrounded by single quotes or double quotes. Strings may contain `'` or `"`
+characters as long as they are escaped (i.e., `\'`, `\"`).
+
+```
+string_lit          = (`'` { unicode_char } `'`) | (`"` { unicode_char } `"`)
+```
+
+### Booleans
+
+```
+bool_lit            = TRUE | FALSE
+```
+
+### Regular Expressions
+
+```
+regex_lit           = "/" { unicode_char } "/"
+```
+
+**Comparators:**
+`=~` matches against
+`!~` doesn't match against
+
+## Statement
+
+```
+statement        = select_stmt
+```
+### SELECT
+
+```
+select_stmt      = "SELECT" fields [from_clause] [ where_clause ] [ group_by_clause ]
+```
+
+### Fields
+
+```
+fields           = field { "," field }
+
+field            = metric_expr [ alias ]
+
+alias            = "AS" identifier
+
+metric_expr      = metric_term { "+" | "-"  metric_term }
+
+metric_term      = metric_factor { "*" | "/" metric_factor }
+
+metric_factor    =  int_lit | float_lit | func "(" arg_expr ")"
+
+func             = "SUM" | "COUNT" | "MAX" | "MIN" | "AVG"
+
+```
+
+### Metric Argument Expression
+
+```
+arg_expr         =  arg_term { "+" | "-"  arg_term }
+
+arg_term         = arg_factor { "*" | "/" arg_factor }
+
+arg_factor       = int_lit | float_lit | var_ref | "(" arg_expr ")"
+```
+
+### Clauses
+
+```
+from_clause      = "FROM" identifier
+
+where_clause     = "WHERE" cond_expr
+
+group_by_clause = "GROUP BY" dimensions
+```
+
+### Where Condition Expression
+```
+cond_expr        = unary_expr { binary_op unary_expr }
+
+unary_expr       = "(" cond_expr ")" | var_ref | literal | list
+
+binary_op        = "+" | "-" | "*" | "/" | "AND" | "OR" | "=" | "!=" | "<>" | "<" | "<=" | ">" | ">=" | "!~" | "=~" | "NI" | "IN"
+
+var_ref          = identifier { "." identifier}
+
+list             = "[" literal { "," literal } "]"
+
+literal          = string_lit | int_lit | float_lit | bool_lit | regex_lit
+
+```
+
+### Group By Dimensions
+```
+dimensions       = var_ref { "," var_ref }
+```
+
+#### Examples:
+
+```sql
+SELECT sum(tcp.bytes_in+tcp.bytes_out) AS total_bytes FROM packetbeat WHERE uid = 1 AND tcp.src_ip = '127.0.0.1' GROUP BY tcp.dst_ip
 ```

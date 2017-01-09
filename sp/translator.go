@@ -164,8 +164,10 @@ func EsDsl(sql string) (string, error) {
 
 	stmt, err := ParseStatement(sql)
 	if err != nil {
+		fmt.Println("stmt err: ", err)
 		return "", err
 	}
+	fmt.Println(stmt)
 	s, ok := stmt.(*SelectStatement)
 	if !ok {
 		return "", fmt.Errorf("only support select")
@@ -392,10 +394,12 @@ func bucketFunctionCalls(exp Expr) []*Call {
 func (s *SelectStatement) bucketScriptAggs() Aggs {
 	var aggs Aggs
 	for _, f := range s.Fields {
-		calls := bucketFunctionCalls(f.Expr)
-		if len(calls) < 2 {
+		switch f.Expr.(type) {
+		case *Call, *VarRef, *Wildcard:
 			continue
 		}
+
+		calls := bucketFunctionCalls(f.Expr)
 		bucketsPath := make(map[string]string)
 		inlineExpr := cleanDocString(f.Expr.String())
 

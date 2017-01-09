@@ -18,8 +18,14 @@ func CmdTranslator(sql string, pretty bool) string {
 	if err != nil {
 		m["err"] = err.Error()
 	}
-	js, _ := simplejson.NewJson([]byte(dsl))
-	m["dsl"] = js.MustMap()
+
+	js, err := simplejson.NewJson([]byte(dsl))
+	if err != nil {
+		m["err"] = err.Error()
+	} else {
+		m["dsl"] = js.MustMap()
+	}
+
 	if pretty {
 		bs, err = json.MarshalIndent(m, "", "  ")
 	} else {

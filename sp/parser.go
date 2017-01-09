@@ -2,27 +2,16 @@ package sp
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
-)
-
-const (
-	// DateFormat represents the format for date literals.
-	DateFormat = "2006-01-02"
-
-	// DateTimeFormat represents the format for date time literals.
-	DateTimeFormat = "2006-01-02 15:04:05.999999"
 )
 
 // Parser represents an InfluxQL parser.
 type Parser struct {
-	s      *bufScanner
-	params map[string]interface{}
+	s *bufScanner
 }
 
 // NewParser returns a new instance of Parser.
@@ -30,63 +19,9 @@ func NewParser(r io.Reader) *Parser {
 	return &Parser{s: newBufScanner(r)}
 }
 
-// SetParams sets the parameters that will be used for any bound parameter substitutions.
-func (p *Parser) SetParams(params map[string]interface{}) {
-	p.params = params
-}
-
-// ParseQuery parses a query string and returns its AST representation.
-func ParseQuery(s string) (*Query, error) { return NewParser(strings.NewReader(s)).ParseQuery() }
-
 // ParseStatement parses a statement string and returns its AST representation.
 func ParseStatement(s string) (Statement, error) {
 	return NewParser(strings.NewReader(s)).ParseStatement()
-}
-
-// MustParseStatement parses a statement string and returns its AST. Panic on error.
-func MustParseStatement(s string) Statement {
-	stmt, err := ParseStatement(s)
-	if err != nil {
-		panic(err.Error())
-	}
-	return stmt
-}
-
-// ParseExpr parses an expression string and returns its AST representation.
-func ParseExpr(s string) (Expr, error) { return NewParser(strings.NewReader(s)).ParseExpr() }
-
-// MustParseExpr parses an expression string and returns its AST. Panic on error.
-func MustParseExpr(s string) Expr {
-	expr, err := ParseExpr(s)
-	if err != nil {
-		panic(err.Error())
-	}
-	return expr
-}
-
-// ParseQuery parses an InfluxQL string and returns a Query AST object.
-func (p *Parser) ParseQuery() (*Query, error) {
-	var statements Statements
-	semi := true
-
-	for {
-		if tok, pos, lit := p.scanIgnoreWhitespace(); tok == EOF {
-			return &Query{Statements: statements}, nil
-		} else if tok == SEMICOLON {
-			semi = true
-		} else {
-			if !semi {
-				return nil, newParseError(tokstr(tok, lit), []string{";"}, pos)
-			}
-			p.unscan()
-			s, err := p.ParseStatement()
-			if err != nil {
-				return nil, err
-			}
-			statements = append(statements, s)
-			semi = false
-		}
-	}
 }
 
 // ParseStatement parses an InfluxQL string and returns a Statement AST object.
@@ -95,7 +30,7 @@ func (p *Parser) ParseStatement() (Statement, error) {
 	tok, pos, lit := p.scanIgnoreWhitespace()
 	switch tok {
 	case SELECT:
-		return p.parseSelectStatement(targetNotRequired)
+		return p.parseSelectStatement()
 	default:
 		return nil, newParseError(tokstr(tok, lit), []string{"SELECT"}, pos)
 	}
@@ -188,7 +123,7 @@ func (p *Parser) parseIdentList() ([]string, error) {
 }
 
 // parseSegmentedIdents parses a segmented identifiers.
-// e.g.,  "db"."rp".measurement  or  "db"..measurement
+// e.g.,  tcp.in_bytes
 func (p *Parser) parseSegmentedIdents() ([]string, error) {
 	ident, err := p.parseIdent()
 	if err != nil {
@@ -203,30 +138,12 @@ func (p *Parser) parseSegmentedIdents() ([]string, error) {
 			p.unscan()
 			break
 		}
-
-		if ch := p.peekRune(); ch == '/' {
-			// Next segment is a regex so we're done.
-			break
-		} else if ch == ':' {
-			// Next segment is context-specific so let caller handle it.
-			break
-		} else if ch == '.' {
-			// Add an empty identifier.
-			idents = append(idents, "")
-			continue
-		}
-
 		// Parse the next identifier.
 		if ident, err = p.parseIdent(); err != nil {
 			return nil, err
 		}
 
 		idents = append(idents, ident)
-	}
-
-	if len(idents) > 3 {
-		msg := fmt.Sprintf("too many segments in %s", QuoteIdent(idents...))
-		return nil, &ParseError{Message: msg}
 	}
 
 	return idents, nil
@@ -267,7 +184,7 @@ func (p *Parser) parseStringList() ([]string, error) {
 
 // parseSelectStatement parses a select string and returns a Statement AST object.
 // This function assumes the SELECT token has already been consumed.
-func (p *Parser) parseSelectStatement(tr targetRequirement) (*SelectStatement, error) {
+func (p *Parser) parseSelectStatement() (*SelectStatement, error) {
 	stmt := &SelectStatement{}
 	var err error
 
@@ -296,11 +213,6 @@ func (p *Parser) parseSelectStatement(tr targetRequirement) (*SelectStatement, e
 		return nil, err
 	}
 
-	// Parse fill options: "fill(<option>)"
-	if stmt.Fill, stmt.FillValue, err = p.parseFill(); err != nil {
-		return nil, err
-	}
-
 	// Parse sort: "ORDER BY FIELD+".
 	if stmt.SortFields, err = p.parseOrderBy(); err != nil {
 		return nil, err
@@ -311,6 +223,10 @@ func (p *Parser) parseSelectStatement(tr targetRequirement) (*SelectStatement, e
 		return nil, err
 	}
 
+	if tok, pos, lit := p.scanIgnoreWhitespace(); tok != EOF {
+		return nil, newParseError(tokstr(tok, lit), []string{"EOF"}, pos)
+	}
+
 	// Set if the query is a raw data query or one with an aggregate
 	stmt.IsRawQuery = true
 	WalkFunc(stmt.Fields, func(n Node) {
@@ -319,59 +235,11 @@ func (p *Parser) parseSelectStatement(tr targetRequirement) (*SelectStatement, e
 		}
 	})
 
-	if err := stmt.validate(tr); err != nil {
+	if err := stmt.validate(); err != nil {
 		return nil, err
 	}
 
 	return stmt, nil
-}
-
-// targetRequirement specifies whether or not a target clause is required.
-type targetRequirement int
-
-const (
-	targetRequired targetRequirement = iota
-	targetNotRequired
-)
-
-// parseTarget parses a string and returns a Target.
-func (p *Parser) parseTarget(tr targetRequirement) (*Target, error) {
-
-	p.scanIgnoreWhitespace()
-	p.unscan()
-
-	// db, rp, and / or measurement
-	idents, err := p.parseSegmentedIdents()
-	if err != nil {
-		return nil, err
-	}
-
-	if len(idents) < 3 {
-		// Check for source measurement reference.
-		if ch := p.peekRune(); ch == ':' {
-			if err := p.parseTokens([]Token{COLON}); err != nil {
-				return nil, err
-			}
-			// Append empty measurement name.
-			idents = append(idents, "")
-		}
-	}
-
-	t := &Target{Measurement: &Measurement{IsTarget: true}}
-
-	switch len(idents) {
-	case 1:
-		t.Measurement.Name = idents[0]
-	case 2:
-		t.Measurement.RetentionPolicy = idents[0]
-		t.Measurement.Name = idents[1]
-	case 3:
-		t.Measurement.Database = idents[0]
-		t.Measurement.RetentionPolicy = idents[1]
-		t.Measurement.Name = idents[2]
-	}
-
-	return t, nil
 }
 
 // parseFields parses a list of one or more fields.
@@ -400,28 +268,15 @@ func (p *Parser) parseFields() (Fields, error) {
 // parseField parses a single field.
 func (p *Parser) parseField() (*Field, error) {
 	f := &Field{}
-
-	// Attempt to parse a regex.
-	re, err := p.parseRegex()
+	p.scanIgnoreWhitespace()
+	p.unscan()
+	// field must expr.
+	expr, err := p.ParseExpr()
 	if err != nil {
 		return nil, err
-	} else if re != nil {
-		f.Expr = re
-	} else {
-		_, pos, _ := p.scanIgnoreWhitespace()
-		p.unscan()
-		// Parse the expression first.
-		expr, err := p.ParseExpr()
-		if err != nil {
-			return nil, err
-		}
-		var c validateField
-		Walk(&c, expr)
-		if c.foundInvalid {
-			return nil, fmt.Errorf("invalid operator %s in SELECT clause at line %d, char %d; operator is intended for WHERE clause", c.badToken, pos.Line+1, pos.Char+1)
-		}
-		f.Expr = expr
 	}
+
+	f.Expr = expr
 
 	// Parse the alias if the current and next tokens are "WS AS".
 	alias, err := p.parseAlias()
@@ -450,9 +305,7 @@ func (c *validateField) Visit(n Node) Visitor {
 	}
 
 	switch e.Op {
-	case EQ, NEQ, EQREGEX,
-		NEQREGEX, LT, LTE, GT, GTE,
-		AND, OR:
+	case EQ, NEQ, EQREGEX, NEQREGEX, LT, LTE, GT, GTE, AND, OR, IN, NI:
 		c.foundInvalid = true
 		c.badToken = e.Op
 		return nil
@@ -512,51 +365,12 @@ func (p *Parser) peekRune() rune {
 func (p *Parser) parseSource() (Source, error) {
 	m := &Measurement{}
 
-	// Attempt to parse a regex.
-	re, err := p.parseRegex()
-	if err != nil {
-		return nil, err
-	} else if re != nil {
-		m.Regex = re
-		// Regex is always last so we're done.
-		return m, nil
-	}
-
 	// Didn't find a regex so parse segmented identifiers.
-	idents, err := p.parseSegmentedIdents()
+	ident, err := p.parseIdent()
 	if err != nil {
 		return nil, err
 	}
-
-	// If we already have the max allowed idents, we're done.
-	if len(idents) == 3 {
-		m.Database, m.RetentionPolicy, m.Name = idents[0], idents[1], idents[2]
-		return m, nil
-	}
-	// Check again for regex.
-	re, err = p.parseRegex()
-	if err != nil {
-		return nil, err
-	} else if re != nil {
-		m.Regex = re
-	}
-
-	// Assign identifiers to their proper locations.
-	switch len(idents) {
-	case 1:
-		if re != nil {
-			m.RetentionPolicy = idents[0]
-		} else {
-			m.Name = idents[0]
-		}
-	case 2:
-		if re != nil {
-			m.Database, m.RetentionPolicy = idents[0], idents[1]
-		} else {
-			m.RetentionPolicy, m.Name = idents[0], idents[1]
-		}
-	}
-
+	m.Database = ident
 	return m, nil
 }
 
@@ -652,46 +466,6 @@ func (p *Parser) parseHaving() (Expr, error) {
 	}
 
 	return expr, nil
-}
-
-// parseFill parses the fill call and its options.
-func (p *Parser) parseFill() (FillOption, interface{}, error) {
-	// Parse the expression first.
-	tok, _, lit := p.scanIgnoreWhitespace()
-	p.unscan()
-	if tok != IDENT || strings.ToLower(lit) != "fill" {
-		return NullFill, nil, nil
-	}
-
-	expr, err := p.ParseExpr()
-	if err != nil {
-		return NullFill, nil, err
-	}
-	fill, ok := expr.(*Call)
-	if !ok {
-		return NullFill, nil, errors.New("fill must be a function call")
-	} else if len(fill.Args) != 1 {
-		return NullFill, nil, errors.New("fill requires an argument, e.g.: 0, null, none, previous, linear")
-	}
-	switch fill.Args[0].String() {
-	case "null":
-		return NullFill, nil, nil
-	case "none":
-		return NoFill, nil, nil
-	case "previous":
-		return PreviousFill, nil, nil
-	case "linear":
-		return LinearFill, nil, nil
-	default:
-		switch num := fill.Args[0].(type) {
-		case *IntegerLiteral:
-			return NumberFill, num.Val, nil
-		case *NumberLiteral:
-			return NumberFill, num.Val, nil
-		default:
-			return NullFill, nil, fmt.Errorf("expected number argument in fill()")
-		}
-	}
 }
 
 // parseOptionalTokenAndInt parses the specified token followed
@@ -814,34 +588,52 @@ func (p *Parser) parseVarRef() (*VarRef, error) {
 	if err != nil {
 		return nil, err
 	}
+	vr := &VarRef{Val: strings.Join(segments, "."), Segments: segments}
+	return vr, nil
+}
 
-	var dtype DataType
-	if tok, _, _ := p.scan(); tok == DOUBLECOLON {
-		tok, pos, lit := p.scan()
-		switch tok {
-		case IDENT:
-			switch strings.ToLower(lit) {
-			case "float":
-				dtype = Float
-			case "integer":
-				dtype = Integer
-			case "string":
-				dtype = String
-			case "boolean":
-				dtype = Boolean
-			default:
-				return nil, newParseError(tokstr(tok, lit), []string{"float", "integer", "string", "boolean", "field", "tag"}, pos)
-			}
-		default:
-			return nil, newParseError(tokstr(tok, lit), []string{"float", "integer", "string", "boolean", "field", "tag"}, pos)
-		}
-	} else {
+func (p *Parser) parseList() (*ListLiteral, error) {
+	list := &ListLiteral{}
+
+	if tok, pos, lit := p.scanIgnoreWhitespace(); tok != LBRACKET {
 		p.unscan()
+		return nil, newParseError(tokstr(tok, lit), []string{"["}, pos)
 	}
 
-	vr := &VarRef{Val: strings.Join(segments, "."), Type: dtype}
+	for {
+		// Read next token.
+		tok, pos, lit := p.scanIgnoreWhitespace()
+		switch tok {
+		case STRING:
+			list.Vals = append(list.Vals, lit)
+		case NUMBER:
+			v, err := strconv.ParseFloat(lit, 64)
+			if err != nil {
+				return nil, &ParseError{Message: "unable to parse number", Pos: pos}
+			}
+			list.Vals = append(list.Vals, v)
+		case INTEGER:
+			v, err := strconv.ParseInt(lit, 10, 64)
+			if err != nil {
+				return nil, &ParseError{Message: "unable to parse integer", Pos: pos}
+			}
+			list.Vals = append(list.Vals, v)
+		default:
+			p.unscan()
+			return nil, newParseError(tokstr(tok, lit), []string{"string", "float", "integer"}, pos)
+		}
 
-	return vr, nil
+		if tok, _, _ := p.scanIgnoreWhitespace(); tok != COMMA {
+			p.unscan()
+			break
+		}
+	}
+
+	if tok, pos, lit := p.scanIgnoreWhitespace(); tok != RBRACKET {
+		p.unscan()
+		return nil, newParseError(tokstr(tok, lit), []string{"]"}, pos)
+	}
+	return list, nil
 }
 
 // ParseExpr parses an expression.
@@ -861,7 +653,6 @@ func (p *Parser) ParseExpr() (Expr, error) {
 	for {
 		// If the next token is NOT an operator then return the expression.
 		op, _, _ := p.scanIgnoreWhitespace()
-
 		if !op.isOperator() {
 			p.unscan()
 			return root.RHS, nil
@@ -879,6 +670,11 @@ func (p *Parser) ParseExpr() (Expr, error) {
 			if rhs.(*RegexLiteral) == nil {
 				tok, pos, lit := p.scanIgnoreWhitespace()
 				return nil, newParseError(tokstr(tok, lit), []string{"regex"}, pos)
+			}
+		} else if IsListOp(op) {
+			p.consumeWhitespace()
+			if rhs, err = p.parseList(); err != nil {
+				return nil, err
 			}
 		} else {
 			if rhs, err = p.parseUnaryExpr(); err != nil {
@@ -910,7 +706,6 @@ func (p *Parser) parseUnaryExpr() (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-
 		// Expect an RPAREN at the end.
 		if tok, pos, lit := p.scanIgnoreWhitespace(); tok != RPAREN {
 			return nil, newParseError(tokstr(tok, lit), []string{")"}, pos)
@@ -935,21 +730,6 @@ func (p *Parser) parseUnaryExpr() (Expr, error) {
 
 		// Parse it as a VarRef.
 		return p.parseVarRef()
-	case DISTINCT:
-		// If the next immediate token is a left parentheses, parse as function call.
-		// Otherwise parse as a Distinct expression.
-		tok0, pos, lit := p.scan()
-		if tok0 == LPAREN {
-			return p.parseCall("distinct")
-		} else if tok0 == WS {
-			tok1, pos, lit := p.scanIgnoreWhitespace()
-			if tok1 != IDENT {
-				return nil, newParseError(tokstr(tok1, lit), []string{"identifier"}, pos)
-			}
-			return &Distinct{Val: lit}, nil
-		}
-
-		return nil, newParseError(tokstr(tok0, lit), []string{"(", "identifier"}, pos)
 	case STRING:
 		return &StringLiteral{Val: lit}, nil
 	case NUMBER:
@@ -966,20 +746,8 @@ func (p *Parser) parseUnaryExpr() (Expr, error) {
 		return &IntegerLiteral{Val: v}, nil
 	case TRUE, FALSE:
 		return &BooleanLiteral{Val: (tok == TRUE)}, nil
-	case DURATIONVAL:
-		v, _ := ParseDuration(lit)
-		return &DurationLiteral{Val: v}, nil
 	case MUL:
 		wc := &Wildcard{}
-		if tok, _, _ := p.scan(); tok == DOUBLECOLON {
-			tok, pos, lit := p.scan()
-			switch tok {
-			default:
-				return nil, newParseError(tokstr(tok, lit), []string{"field", "tag"}, pos)
-			}
-		} else {
-			p.unscan()
-		}
 		return wc, nil
 	case REGEX:
 		re, err := regexp.Compile(lit)
@@ -987,29 +755,6 @@ func (p *Parser) parseUnaryExpr() (Expr, error) {
 			return nil, &ParseError{Message: err.Error(), Pos: pos}
 		}
 		return &RegexLiteral{Val: re}, nil
-	case BOUNDPARAM:
-		k := strings.TrimPrefix(lit, "$")
-		if len(k) == 0 {
-			return nil, errors.New("empty bound parameter")
-		}
-
-		v, ok := p.params[k]
-		if !ok {
-			return nil, fmt.Errorf("missing parameter: %s", k)
-		}
-
-		switch v := v.(type) {
-		case float64:
-			return &NumberLiteral{Val: v}, nil
-		case int64:
-			return &IntegerLiteral{Val: v}, nil
-		case string:
-			return &StringLiteral{Val: v}, nil
-		case bool:
-			return &BooleanLiteral{Val: v}, nil
-		default:
-			return nil, fmt.Errorf("unable to bind parameter with type %T", v)
-		}
 	default:
 		return nil, newParseError(tokstr(tok, lit), []string{"identifier", "string", "number", "bool"}, pos)
 	}
@@ -1128,137 +873,6 @@ func (p *Parser) consumeWhitespace() {
 // unscan pushes the previously read token back onto the buffer.
 func (p *Parser) unscan() { p.s.Unscan() }
 
-// ParseDuration parses a time duration from a string.
-// This is needed instead of time.ParseDuration because this will support
-// the full syntax that InfluxQL supports for specifying durations
-// including weeks and days.
-func ParseDuration(s string) (time.Duration, error) {
-	// Return an error if the string is blank or one character
-	if len(s) < 2 {
-		return 0, ErrInvalidDuration
-	}
-
-	// Split string into individual runes.
-	a := split(s)
-
-	// Start with a zero duration.
-	var d time.Duration
-	i := 0
-
-	// Check for a negative.
-	isNegative := false
-	if a[i] == '-' {
-		isNegative = true
-		i++
-	}
-
-	var measure int64
-	var unit string
-
-	// Parsing loop.
-	for i < len(a) {
-		// Find the number portion.
-		start := i
-		for ; i < len(a) && isDigit(a[i]); i++ {
-			// Scan for the digits.
-		}
-
-		// Check if we reached the end of the string prematurely.
-		if i >= len(a) || i == start {
-			return 0, ErrInvalidDuration
-		}
-
-		// Parse the numeric part.
-		n, err := strconv.ParseInt(string(a[start:i]), 10, 64)
-		if err != nil {
-			return 0, ErrInvalidDuration
-		}
-		measure = n
-
-		// Extract the unit of measure.
-		// If the last two characters are "ms" then parse as milliseconds.
-		// Otherwise just use the last character as the unit of measure.
-		unit = string(a[i])
-		switch a[i] {
-		case 'u', 'µ':
-			d += time.Duration(n) * time.Microsecond
-		case 'm':
-			if i+1 < len(a) && a[i+1] == 's' {
-				unit = string(a[i : i+2])
-				d += time.Duration(n) * time.Millisecond
-				i += 2
-				continue
-			}
-			d += time.Duration(n) * time.Minute
-		case 's':
-			d += time.Duration(n) * time.Second
-		case 'h':
-			d += time.Duration(n) * time.Hour
-		case 'd':
-			d += time.Duration(n) * 24 * time.Hour
-		case 'w':
-			d += time.Duration(n) * 7 * 24 * time.Hour
-		default:
-			return 0, ErrInvalidDuration
-		}
-		i++
-	}
-
-	// Check to see if we overflowed a duration
-	if d < 0 && !isNegative {
-		return 0, fmt.Errorf("overflowed duration %d%s: choose a smaller duration or INF", measure, unit)
-	}
-
-	if isNegative {
-		d = -d
-	}
-	return d, nil
-}
-
-// FormatDuration formats a duration to a string.
-func FormatDuration(d time.Duration) string {
-	if d == 0 {
-		return "0s"
-	} else if d%(7*24*time.Hour) == 0 {
-		return fmt.Sprintf("%dw", d/(7*24*time.Hour))
-	} else if d%(24*time.Hour) == 0 {
-		return fmt.Sprintf("%dd", d/(24*time.Hour))
-	} else if d%time.Hour == 0 {
-		return fmt.Sprintf("%dh", d/time.Hour)
-	} else if d%time.Minute == 0 {
-		return fmt.Sprintf("%dm", d/time.Minute)
-	} else if d%time.Second == 0 {
-		return fmt.Sprintf("%ds", d/time.Second)
-	} else if d%time.Millisecond == 0 {
-		return fmt.Sprintf("%dms", d/time.Millisecond)
-	}
-	// Although we accept both "u" and "µ" when reading microsecond durations,
-	// we output with "u", which can be represented in 1 byte,
-	// instead of "µ", which requires 2 bytes.
-	return fmt.Sprintf("%du", d/time.Microsecond)
-}
-
-// parseTokens consumes an expected sequence of tokens.
-func (p *Parser) parseTokens(toks []Token) error {
-	for _, expected := range toks {
-		if tok, pos, lit := p.scanIgnoreWhitespace(); tok != expected {
-			return newParseError(tokstr(tok, lit), []string{tokens[expected]}, pos)
-		}
-	}
-	return nil
-}
-
-// parseTokenMaybe consumes the next token if it matches the expected one and
-// does nothing if the next token is not the next one.
-func (p *Parser) parseTokenMaybe(expected Token) bool {
-	tok, _, _ := p.scanIgnoreWhitespace()
-	if tok != expected {
-		p.unscan()
-		return false
-	}
-	return true
-}
-
 var (
 	qsReplacer = strings.NewReplacer("\n", `\n`, `\`, `\\`, `'`, `\'`)
 	qiReplacer = strings.NewReplacer("\n", `\n`, `\`, `\\`, `"`, `\"`)
@@ -1323,18 +937,6 @@ func split(s string) (a []rune) {
 	}
 	return
 }
-
-// isDateString returns true if the string looks like a date-only time literal.
-func isDateString(s string) bool { return dateStringRegexp.MatchString(s) }
-
-// isDateTimeString returns true if the string looks like a date+time time literal.
-func isDateTimeString(s string) bool { return dateTimeStringRegexp.MatchString(s) }
-
-var dateStringRegexp = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
-var dateTimeStringRegexp = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}.+`)
-
-// ErrInvalidDuration is returned when parsing a malformatted duration.
-var ErrInvalidDuration = errors.New("invalid duration")
 
 // ParseError represents an error that occurred during parsing.
 type ParseError struct {

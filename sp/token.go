@@ -16,18 +16,16 @@ const (
 
 	literalBeg
 	// IDENT and the following are InfluxQL literal tokens.
-	IDENT       // main
-	BOUNDPARAM  // $param
-	NUMBER      // 12345.67
-	INTEGER     // 12345
-	DURATIONVAL // 13h
-	STRING      // "abc"
-	BADSTRING   // "abc
-	BADESCAPE   // \q
-	TRUE        // true
-	FALSE       // false
-	REGEX       // Regular expressions
-	BADREGEX    // `.*
+	IDENT     // main
+	NUMBER    // 12345.67
+	INTEGER   // 12345
+	STRING    // "abc"
+	BADSTRING // "abc
+	BADESCAPE // \q
+	TRUE      // true
+	FALSE     // false
+	REGEX     // Regular expressions
+	BADREGEX  // `.*
 	literalEnd
 
 	operatorBeg
@@ -40,6 +38,8 @@ const (
 
 	AND // AND
 	OR  // OR
+	NI  // not in
+	IN
 
 	EQ       // =
 	NEQ      // !=
@@ -51,13 +51,12 @@ const (
 	GTE      // >=
 	operatorEnd
 
-	LPAREN      // (
-	RPAREN      // )
-	COMMA       // ,
-	COLON       // :
-	DOUBLECOLON // ::
-	SEMICOLON   // ;
-	DOT         // .
+	LBRACKET // [
+	LPAREN   // (
+	RBRACKET // ]
+	RPAREN   // )
+	COMMA    // ,
+	DOT      // .
 
 	keywordBeg
 	// ALL and the following are InfluxQL Keywords
@@ -69,7 +68,6 @@ const (
 	FROM
 	GROUP
 	HAVING
-	IN
 	LIMIT
 	ORDER
 	SELECT
@@ -82,15 +80,15 @@ var tokens = [...]string{
 	EOF:     "EOF",
 	WS:      "WS",
 
-	IDENT:       "IDENT",
-	NUMBER:      "NUMBER",
-	DURATIONVAL: "DURATIONVAL",
-	STRING:      "STRING",
-	BADSTRING:   "BADSTRING",
-	BADESCAPE:   "BADESCAPE",
-	TRUE:        "TRUE",
-	FALSE:       "FALSE",
-	REGEX:       "REGEX",
+	IDENT:     "IDENT",
+	NUMBER:    "NUMBER",
+	INTEGER:   "INTEGER",
+	STRING:    "STRING",
+	BADSTRING: "BADSTRING",
+	BADESCAPE: "BADESCAPE",
+	TRUE:      "TRUE",
+	FALSE:     "FALSE",
+	REGEX:     "REGEX",
 
 	ADD: "+",
 	SUB: "-",
@@ -100,6 +98,8 @@ var tokens = [...]string{
 
 	AND: "AND",
 	OR:  "OR",
+	NI:  "NI",
+	IN:  "IN",
 
 	EQ:       "=",
 	NEQ:      "!=",
@@ -110,13 +110,12 @@ var tokens = [...]string{
 	GT:       ">",
 	GTE:      ">=",
 
-	LPAREN:      "(",
-	RPAREN:      ")",
-	COMMA:       ",",
-	COLON:       ":",
-	DOUBLECOLON: "::",
-	SEMICOLON:   ";",
-	DOT:         ".",
+	LBRACKET: "[",
+	LPAREN:   "(",
+	RBRACKET: "]",
+	RPAREN:   ")",
+	COMMA:    ",",
+	DOT:      ".",
 
 	AS:       "AS",
 	ASC:      "ASC",
@@ -126,7 +125,6 @@ var tokens = [...]string{
 	FROM:     "FROM",
 	GROUP:    "GROUP",
 	HAVING:   "HAVING",
-	IN:       "IN",
 	LIMIT:    "LIMIT",
 	ORDER:    "ORDER",
 	SELECT:   "SELECT",
@@ -140,7 +138,7 @@ func init() {
 	for tok := keywordBeg + 1; tok < keywordEnd; tok++ {
 		keywords[strings.ToLower(tokens[tok])] = tok
 	}
-	for _, tok := range []Token{AND, OR} {
+	for _, tok := range []Token{AND, OR, IN, NI} {
 		keywords[strings.ToLower(tokens[tok])] = tok
 	}
 	keywords["true"] = TRUE
@@ -171,12 +169,14 @@ func (tok Token) Precedence() int {
 		return 1
 	case AND:
 		return 2
-	case EQ, NEQ, EQREGEX, NEQREGEX, LT, LTE, GT, GTE:
+	case IN, NI:
 		return 3
-	case ADD, SUB:
+	case EQ, NEQ, EQREGEX, NEQREGEX, LT, LTE, GT, GTE:
 		return 4
-	case MUL, DIV, MOD:
+	case ADD, SUB:
 		return 5
+	case MUL, DIV, MOD:
+		return 6
 	}
 	return 0
 }

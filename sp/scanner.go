@@ -42,8 +42,7 @@ func (s *Scanner) Scan() (tok Token, pos Pos, lit string) {
 	case eof:
 		return EOF, pos, ""
 	case '"':
-		s.r.unread()
-		return s.scanIdent(true)
+		return s.scanString()
 	case '\'':
 		return s.scanString()
 	case '.':
@@ -53,16 +52,8 @@ func (s *Scanner) Scan() (tok Token, pos Pos, lit string) {
 			return s.scanNumber()
 		}
 		return DOT, pos, ""
-	case '$':
-		tok, _, lit = s.scanIdent(false)
-		if tok != IDENT {
-			return tok, pos, "$" + lit
-		}
-		return BOUNDPARAM, pos, "$" + lit
-	case '+':
-		return ADD, pos, ""
-	case '-':
-		return SUB, pos, ""
+	case '+', '-':
+		return s.scanNumber()
 	case '*':
 		return MUL, pos, ""
 	case '/':
@@ -100,16 +91,12 @@ func (s *Scanner) Scan() (tok Token, pos Pos, lit string) {
 		return LPAREN, pos, ""
 	case ')':
 		return RPAREN, pos, ""
+	case '[':
+		return LBRACKET, pos, ""
+	case ']':
+		return RBRACKET, pos, ""
 	case ',':
 		return COMMA, pos, ""
-	case ';':
-		return SEMICOLON, pos, ""
-	case ':':
-		if ch1, _ := s.r.read(); ch1 == ':' {
-			return DOUBLECOLON, pos, ""
-		}
-		s.r.unread()
-		return COLON, pos, ""
 	}
 
 	return ILLEGAL, pos, string(ch0)
@@ -268,32 +255,7 @@ func (s *Scanner) scanNumber() (tok Token, pos Pos, lit string) {
 
 	// Read as a duration or integer if it doesn't have a fractional part.
 	if !isDecimal {
-		// If the next rune is a letter then this is a duration token.
-		if ch0, _ := s.r.read(); isLetter(ch0) || ch0 == 'µ' {
-			_, _ = buf.WriteRune(ch0)
-			for {
-				ch1, _ := s.r.read()
-				if !isLetter(ch1) && ch1 != 'µ' {
-					s.r.unread()
-					break
-				}
-				_, _ = buf.WriteRune(ch1)
-			}
-
-			// Continue reading digits and letters as part of this token.
-			for {
-				if ch0, _ := s.r.read(); isLetter(ch0) || ch0 == 'µ' || isDigit(ch0) {
-					_, _ = buf.WriteRune(ch0)
-				} else {
-					s.r.unread()
-					break
-				}
-			}
-			return DURATIONVAL, pos, buf.String()
-		} else {
-			s.r.unread()
-			return INTEGER, pos, buf.String()
-		}
+		return INTEGER, pos, buf.String()
 	}
 	return NUMBER, pos, buf.String()
 }
@@ -584,6 +546,10 @@ var errInvalidIdentifier = errors.New("invalid identifier")
 // IsRegexOp returns true if the operator accepts a regex operand.
 func IsRegexOp(t Token) bool {
 	return (t == EQREGEX || t == NEQREGEX)
+}
+
+func IsListOp(t Token) bool {
+	return (t == IN || t == NI)
 }
 
 // assert will panic with a given formatted message if the given condition is false.
