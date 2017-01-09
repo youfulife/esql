@@ -218,8 +218,8 @@ func (p *Parser) parseSelectStatement() (*SelectStatement, error) {
 		return nil, err
 	}
 
-	// Parse limit: "LIMIT <n>".
-	if stmt.Limit, err = p.parseOptionalTokenAndInt(LIMIT); err != nil {
+	// Parse limit: "LIMIT <m>,<n>".
+	if stmt.Limit, stmt.Offset, err = p.parseLimit(); err != nil {
 		return nil, err
 	}
 
@@ -468,29 +468,48 @@ func (p *Parser) parseHaving() (Expr, error) {
 	return expr, nil
 }
 
-// parseOptionalTokenAndInt parses the specified token followed
+// parseLimit parses the specified token followed
 // by an int, if it exists.
-func (p *Parser) parseOptionalTokenAndInt(t Token) (int, error) {
+func (p *Parser) parseLimit() (int, int, error) {
 	// Check if the token exists.
-	if tok, _, _ := p.scanIgnoreWhitespace(); tok != t {
+	if tok, _, _ := p.scanIgnoreWhitespace(); tok != LIMIT {
 		p.unscan()
-		return 0, nil
+		return 0, 0, nil
 	}
 
 	// Scan the number.
 	tok, pos, lit := p.scanIgnoreWhitespace()
 	if tok != INTEGER {
-		return 0, newParseError(tokstr(tok, lit), []string{"integer"}, pos)
+		return 0, 0, newParseError(tokstr(tok, lit), []string{"integer"}, pos)
 	}
 
 	// Parse number.
 	n, _ := strconv.ParseInt(lit, 10, 64)
 	if n < 0 {
-		msg := fmt.Sprintf("%s must be >= 0", t.String())
-		return 0, &ParseError{Message: msg, Pos: pos}
+		msg := fmt.Sprintf("%s must be >= 0", LIMIT.String())
+		return 0, 0, &ParseError{Message: msg, Pos: pos}
 	}
 
-	return int(n), nil
+	// Parse offset
+	if _tok, _, _ := p.scanIgnoreWhitespace(); _tok != COMMA {
+		p.unscan()
+		return int(n), 0, nil
+	}
+
+	// Scan the number.
+	tok, pos, lit = p.scanIgnoreWhitespace()
+	if tok != INTEGER {
+		return 0, 0, newParseError(tokstr(tok, lit), []string{"integer"}, pos)
+	}
+
+	// Parse number.
+	m, _ := strconv.ParseInt(lit, 10, 64)
+	if m < 0 {
+		msg := fmt.Sprintf("offset must be >= 0")
+		return 0, 0, &ParseError{Message: msg, Pos: pos}
+	}
+
+	return int(n), int(m), nil
 }
 
 // parseOrderBy parses the "ORDER BY" clause of a query, if it exists.
@@ -881,11 +900,6 @@ var (
 // QuoteString returns a quoted string.
 func QuoteString(s string) string {
 	return `'` + qsReplacer.Replace(s) + `'`
-}
-
-// ScriptIdent returns a quoted string.
-func ScriptIdent(s string) string {
-	return fmt.Sprintf("doc['%s'].value", qsReplacer.Replace(s))
 }
 
 // QuoteIdent returns a quoted identifier from multiple bare identifiers.

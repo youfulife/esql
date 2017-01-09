@@ -422,7 +422,7 @@ func (s *SelectStatement) String() string {
 		_, _ = fmt.Fprintf(&buf, " LIMIT %d", s.Limit)
 	}
 	if s.Offset > 0 {
-		_, _ = buf.WriteString(" OFFSET ")
+		_, _ = buf.WriteString(", ")
 		_, _ = buf.WriteString(strconv.Itoa(s.Offset))
 	}
 	return buf.String()
@@ -559,8 +559,8 @@ func (s *SelectStatement) validateAggregates() error {
 			if err := s.validSelectWithAggregate(); err != nil {
 				return err
 			}
-			if len(expr.Args) != 1 {
-				return fmt.Errorf("invalid number of arguments for %s, expected 1, got %d", expr.Name, len(expr.Args))
+			if len(expr.Args) < 1 {
+				return fmt.Errorf("invalid number of arguments for %s, expected at least 1, got %d", expr.Name, len(expr.Args))
 			}
 			switch fc := expr.Args[0].(type) {
 			case *VarRef:
@@ -570,6 +570,7 @@ func (s *SelectStatement) validateAggregates() error {
 					return err
 				}
 			case *Wildcard:
+			case *Call:
 			default:
 				return fmt.Errorf("expected field argument in %s()", expr.Name)
 			}
@@ -875,7 +876,7 @@ type VarRef struct {
 
 // String returns a string representation of the variable reference.
 func (r *VarRef) String() string {
-	buf := bytes.NewBufferString(ScriptIdent(r.Val))
+	buf := bytes.NewBufferString(r.Val)
 	return buf.String()
 }
 

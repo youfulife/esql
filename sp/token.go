@@ -64,7 +64,6 @@ const (
 	ASC
 	BY
 	DESC
-	DISTINCT
 	FROM
 	GROUP
 	HAVING
@@ -117,18 +116,17 @@ var tokens = [...]string{
 	COMMA:    ",",
 	DOT:      ".",
 
-	AS:       "AS",
-	ASC:      "ASC",
-	BY:       "BY",
-	DESC:     "DESC",
-	DISTINCT: "DISTINCT",
-	FROM:     "FROM",
-	GROUP:    "GROUP",
-	HAVING:   "HAVING",
-	LIMIT:    "LIMIT",
-	ORDER:    "ORDER",
-	SELECT:   "SELECT",
-	WHERE:    "WHERE",
+	AS:     "AS",
+	ASC:    "ASC",
+	BY:     "BY",
+	DESC:   "DESC",
+	FROM:   "FROM",
+	GROUP:  "GROUP",
+	HAVING: "HAVING",
+	LIMIT:  "LIMIT",
+	ORDER:  "ORDER",
+	SELECT: "SELECT",
+	WHERE:  "WHERE",
 }
 
 var keywords map[string]Token
@@ -149,12 +147,6 @@ func init() {
 func (tok Token) String() string {
 	if tok >= 0 && tok < Token(len(tokens)) {
 		switch tok {
-		case AND:
-			return "&&"
-		case OR:
-			return "||"
-		case EQ:
-			return "=="
 		default:
 			return tokens[tok]
 		}
