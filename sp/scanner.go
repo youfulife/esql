@@ -388,9 +388,9 @@ func (r *reader) read() (ch rune, pos Pos) {
 	if err != nil {
 		ch = eof
 	} else if ch == '\r' {
-		if ch, _, err := r.r.ReadRune(); err != nil {
+		if _ch, _, err := r.r.ReadRune(); err != nil {
 			// nop
-		} else if ch != '\n' {
+		} else if _ch != '\n' {
 			_ = r.r.UnreadRune()
 		}
 		ch = '\n'
@@ -548,6 +548,7 @@ func IsRegexOp(t Token) bool {
 	return (t == EQREGEX || t == NEQREGEX)
 }
 
+// IsListOp returns true if the operator accepts a list operand.
 func IsListOp(t Token) bool {
 	return (t == IN || t == NI)
 }
