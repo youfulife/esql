@@ -77,7 +77,7 @@ var aggs = [...]string{
 	Sum:             "sum",
 	Top:             "top",
 	ValueCount:      "value_count",
-	StarCount:       "star_count",
+	// StarCount:       "star_count",
 
 	DateHistogram:    "date_histogram",
 	DateRange:        "date_range",
@@ -451,10 +451,37 @@ func (c *Call) metricAggParams() map[string]interface{} {
 	case *BinaryExpr:
 		c.RewriteMetricArgs()
 		params["script"] = c.Args[0].String()
+	case *Wildcard:
+		params["field"] = ""
 	default:
 		panic(fmt.Errorf("not support metric argument"))
 	}
 	return params
+}
+
+func (c *Call) metricAggType() ESAgg {
+	// sql use count(), es func is value_count()
+	if c.Name == "count" {
+		if _, ok := c.Args[0].(*Wildcard); ok {
+			return StarCount
+		}
+		return ValueCount
+	}
+
+	for i := metricBegin; i < metricEnd; i++ {
+		if aggs[i] == c.Name {
+			return ESAgg(i)
+		}
+	}
+	panic(fmt.Errorf("not support agg aggregation"))
+}
+
+func (f *Field) metricAggName() string {
+	if len(f.Alias) > 0 {
+		return f.Alias
+	}
+	fn, _ := f.Expr.(*Call)
+	return fmt.Sprintf(`%s(%s)`, fn.Name, fn.Args[0].String())
 }
 
 func (s *SelectStatement) metricAggs() Aggs {
@@ -465,56 +492,9 @@ func (s *SelectStatement) metricAggs() Aggs {
 			continue
 		}
 		agg := &Agg{}
-		agg.params = make(map[string]interface{})
-		if field.Alias == "" {
-			agg.name = fmt.Sprintf(`%s(%s)`, fn.Name, cleanDocString(fn.Args[0].String()))
-		} else {
-			agg.name = cleanDocString(field.Alias)
-		}
-
-		switch fn.Name {
-		case "avg":
-			agg.typ = Avg
-			agg.params = fn.metricAggParams()
-		case "cardinality":
-			agg.typ = Cardinality
-			agg.params = fn.metricAggParams()
-		case "sum":
-			agg.typ = Sum
-			agg.params = fn.metricAggParams()
-		case "max":
-			agg.typ = Max
-			agg.params = fn.metricAggParams()
-		case "min":
-			agg.typ = Min
-			agg.params = fn.metricAggParams()
-		case "top":
-			agg.typ = Top
-			agg.params = fn.metricAggParams()
-		case "count":
-			agg.typ = ValueCount
-			switch arg := fn.Args[0].(type) {
-			case *VarRef:
-				agg.params["field"] = arg.String()
-			case *Wildcard:
-				agg.typ = StarCount
-				agg.params["field"] = ""
-			case *BinaryExpr:
-				fn.RewriteMetricArgs()
-				agg.params["script"] = fn.Args[0].String()
-			default:
-				panic(fmt.Errorf("not support metric argument"))
-			}
-
-		case "stats":
-			agg.typ = Stats
-			agg.params = fn.metricAggParams()
-		case "extended_stats":
-			agg.typ = ExtendedStats
-			agg.params = fn.metricAggParams()
-		default:
-			panic(fmt.Errorf("not support agg aggregation"))
-		}
+		agg.name = field.metricAggName()
+		agg.typ = fn.metricAggType()
+		agg.params = fn.metricAggParams()
 
 		aggs = append(aggs, agg)
 	}
