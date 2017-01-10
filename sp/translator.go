@@ -167,11 +167,12 @@ func EsDsl(sql string) (string, error) {
 		fmt.Println("stmt err: ", err)
 		return "", err
 	}
-	fmt.Println(stmt)
+	// fmt.Println(stmt)
 	s, ok := stmt.(*SelectStatement)
 	if !ok {
 		return "", fmt.Errorf("only support select")
 	}
+	s.RewriteConditions()
 
 	js := simplejson.New()
 
@@ -442,6 +443,20 @@ func (s *SelectStatement) bucketScriptAggs() Aggs {
 	return aggs
 }
 
+func (c *Call) metricAggParams() map[string]interface{} {
+	params := make(map[string]interface{})
+	switch arg := c.Args[0].(type) {
+	case *VarRef:
+		params["field"] = arg.String()
+	case *BinaryExpr:
+		c.RewriteMetricArgs()
+		params["script"] = c.Args[0].String()
+	default:
+		panic(fmt.Errorf("not support metric argument"))
+	}
+	return params
+}
+
 func (s *SelectStatement) metricAggs() Aggs {
 	var aggs Aggs
 	for _, field := range s.Fields {
@@ -460,37 +475,43 @@ func (s *SelectStatement) metricAggs() Aggs {
 		switch fn.Name {
 		case "avg":
 			agg.typ = Avg
-			agg.params["script"] = fn.Args[0].String()
+			agg.params = fn.metricAggParams()
 		case "cardinality":
 			agg.typ = Cardinality
-			agg.params["script"] = fn.Args[0].String()
+			agg.params = fn.metricAggParams()
 		case "sum":
 			agg.typ = Sum
-			agg.params["script"] = fn.Args[0].String()
+			agg.params = fn.metricAggParams()
 		case "max":
 			agg.typ = Max
-			agg.params["script"] = fn.Args[0].String()
+			agg.params = fn.metricAggParams()
 		case "min":
 			agg.typ = Min
-			agg.params["script"] = fn.Args[0].String()
+			agg.params = fn.metricAggParams()
 		case "top":
 			agg.typ = Top
-			agg.params["script"] = fn.Args[0].String()
+			agg.params = fn.metricAggParams()
 		case "count":
 			agg.typ = ValueCount
-			if fn.Args[0].String() == "*" {
+			switch arg := fn.Args[0].(type) {
+			case *VarRef:
+				agg.params["field"] = arg.String()
+			case *Wildcard:
 				agg.typ = StarCount
 				agg.params["field"] = ""
-			} else {
+			case *BinaryExpr:
+				fn.RewriteMetricArgs()
 				agg.params["script"] = fn.Args[0].String()
+			default:
+				panic(fmt.Errorf("not support metric argument"))
 			}
 
 		case "stats":
 			agg.typ = Stats
-			agg.params["script"] = fn.Args[0].String()
+			agg.params = fn.metricAggParams()
 		case "extended_stats":
 			agg.typ = ExtendedStats
-			agg.params["script"] = fn.Args[0].String()
+			agg.params = fn.metricAggParams()
 		default:
 			panic(fmt.Errorf("not support agg aggregation"))
 		}

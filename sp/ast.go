@@ -1136,12 +1136,6 @@ type walkFuncVisitor func(Node)
 
 func (fn walkFuncVisitor) Visit(n Node) Visitor { fn(n); return fn }
 
-// Rewriter can be called by Rewrite to replace nodes in the AST hierarchy.
-// The Rewrite() function is called once per node.
-type Rewriter interface {
-	Rewrite(Node) Node
-}
-
 // Valuer is the interface that wraps the Value() method.
 //
 // Value returns the value and existence flag for a given key.
@@ -1202,6 +1196,11 @@ type Measurement struct {
 
 // String returns a string representation of the measurement.
 func (m *Measurement) String() string {
+	return m.Database
+}
+
+//ESString ...
+func (m *Measurement) ESString() string {
 	return m.Database
 }
 
