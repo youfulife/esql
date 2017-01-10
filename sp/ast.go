@@ -508,57 +508,9 @@ func (s *SelectStatement) validateFields() error {
 	return nil
 }
 
-// validSelectWithAggregate determines if a SELECT statement has the correct
-// combination of aggregate functions combined with selected fields and tags
-// Currently we don't have support for all aggregates, but aggregates that
-// can be combined with fields/tags are:
-//  TOP, BOTTOM, MAX, MIN, FIRST, LAST
-func (s *SelectStatement) validSelectWithAggregate() error {
-	calls := map[string]struct{}{}
-	numAggregates := 0
-	for _, f := range s.Fields {
-		fieldCalls := walkFunctionCalls(f.Expr)
-		for _, c := range fieldCalls {
-			calls[c.Name] = struct{}{}
-		}
-		if len(fieldCalls) != 0 {
-			numAggregates++
-		}
-	}
-	// For TOP, BOTTOM, MAX, MIN, FIRST, LAST, PERCENTILE (selector functions) it is ok to ask for fields and tags
-	// but only if one function is specified.  Combining multiple functions and fields and tags is not currently supported
-	onlySelectors := true
-	for k := range calls {
-		switch k {
-		case "top", "bottom", "max", "min", "first", "last", "percentile", "sample":
-		default:
-			onlySelectors = false
-			break
-		}
-	}
-	if onlySelectors {
-		// If they only have one selector, they can have as many fields or tags as they want
-		if numAggregates == 1 {
-			return nil
-		}
-		// If they have multiple selectors, they are not allowed to have any other fields or tags specified
-		if numAggregates > 1 && len(s.Fields) != numAggregates {
-			return fmt.Errorf("mixing multiple selector functions with tags or fields is not supported")
-		}
-	}
-
-	if numAggregates != 0 && numAggregates != len(s.Fields) {
-		return fmt.Errorf("mixing aggregate and non-aggregate queries is not supported")
-	}
-	return nil
-}
-
 func (s *SelectStatement) validateAggregates() error {
 	for _, f := range s.Fields {
 		for _, expr := range walkFunctionCalls(f.Expr) {
-			if err := s.validSelectWithAggregate(); err != nil {
-				return err
-			}
 			if len(expr.Args) < 1 {
 				return fmt.Errorf("invalid number of arguments for %s, expected at least 1, got %d", expr.Name, len(expr.Args))
 			}

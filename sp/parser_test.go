@@ -35,6 +35,28 @@ func TestParser_ParseStatement(t *testing.T) {
 				Sources: []sp.Source{&sp.Measurement{Database: "myseries"}},
 			},
 		},
+
+		// SELECT group by having statement
+		{
+			s: `SELECT ipo_year, COUNT(*) AS ipo_count FROM symbol GROUP BY ipo_year HAVING ipo_count > 200`,
+			stmt: &sp.SelectStatement{
+				IsRawQuery: false,
+				Fields: []*sp.Field{
+					{Expr: &sp.VarRef{Val: "ipo_year", Segments: []string{"ipo_year"}}},
+					{Expr: &sp.Call{Name: "count", Args: []sp.Expr{&sp.Wildcard{}}}, Alias: "ipo_count"},
+				},
+				Sources: []sp.Source{&sp.Measurement{Database: "symbol"}},
+				Dimensions: []*sp.Dimension{
+					{Expr: &sp.VarRef{Val: "ipo_year", Segments: []string{"ipo_year"}}},
+				},
+				Having: &sp.BinaryExpr{
+					Op:  sp.GT,
+					LHS: &sp.VarRef{Val: "ipo_count", Segments: []string{"ipo_count"}},
+					RHS: &sp.IntegerLiteral{Val: 200},
+				},
+			},
+		},
+
 		{
 			s: `SELECT * FROM myseries GROUP BY *`,
 			stmt: &sp.SelectStatement{

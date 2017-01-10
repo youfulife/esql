@@ -944,14 +944,6 @@ func IdentNeedsQuotes(ident string) bool {
 	return false
 }
 
-// split splits a string into a slice of runes.
-func split(s string) (a []rune) {
-	for _, ch := range s {
-		a = append(a, ch)
-	}
-	return
-}
-
 // ParseError represents an error that occurred during parsing.
 type ParseError struct {
 	Message  string
