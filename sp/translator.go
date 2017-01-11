@@ -166,7 +166,6 @@ func EsDsl(sql string) (string, error) {
 
 	stmt, err := ParseStatement(sql)
 	if err != nil {
-		fmt.Println("stmt err: ", err)
 		return "", err
 	}
 	// fmt.Println(stmt)

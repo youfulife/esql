@@ -57,13 +57,9 @@ Usage of ./esql:
 
 # Todo
 ```
-"select year, max(adj_close) from quote where symbol='AAPL' group by date_histogram('@timestamp','1y') as year"
-"SELECT shares_count, COUNT(*) FROM symbol GROUP BY floor(market_cap / last_sale / 1000000)  AS shares_count ORDER BY shares_count LIMIT 3"
-
 //filter aggregation
 "select sum(market_cap, "exchange=='nyse'") from symbol where ipo_year=1998"
 "select * from symbol WHERE symbol LIKE 'AAP%'"
 "SELECT ipo_year_range, MAX(market_cap) AS max_market_cap FROM symbol GROUP BY histogram(ipo_year, 10) AS ipo_year_range ORDER BY ipo_year_range"
 
-"select sum(market_cap)+1 from symbol where ipo_year=1998"
 ```

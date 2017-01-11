@@ -34,7 +34,8 @@ func (s *Scanner) Scan() (tok Token, pos Pos, lit string) {
 		s.r.unread()
 		return s.scanIdent(true)
 	} else if isDigit(ch0) {
-		return s.scanNumber()
+		s.r.unread()
+		return s.ScanNumber()
 	}
 
 	// Otherwise parse individual characters.
@@ -46,14 +47,11 @@ func (s *Scanner) Scan() (tok Token, pos Pos, lit string) {
 	case '\'':
 		return s.scanString()
 	case '.':
-		ch1, _ := s.r.read()
-		s.r.unread()
-		if isDigit(ch1) {
-			return s.scanNumber()
-		}
 		return DOT, pos, ""
-	case '+', '-':
-		return s.scanNumber()
+	case '-':
+		return SUB, pos, ""
+	case '+':
+		return ADD, pos, ""
 	case '*':
 		return MUL, pos, ""
 	case '/':
@@ -197,45 +195,16 @@ func (s *Scanner) ScanRegex() (tok Token, pos Pos, lit string) {
 	return REGEX, pos, string(b)
 }
 
-// scanNumber consumes anything that looks like the start of a number.
+// ScanNumber consumes anything that looks like the start of a number.
 // Numbers start with a digit, full stop, plus sign or minus sign.
 // This function can return non-number tokens if a scan is a false positive.
 // For example, a minus sign followed by a letter will just return a minus sign.
-func (s *Scanner) scanNumber() (tok Token, pos Pos, lit string) {
+func (s *Scanner) ScanNumber() (tok Token, pos Pos, lit string) {
 	var buf bytes.Buffer
-
-	// Check if the initial rune is a "+" or "-".
-	ch, pos := s.r.curr()
-	if ch == '+' || ch == '-' {
-		// Peek at the next two runes.
-		ch1, _ := s.r.read()
-		ch2, _ := s.r.read()
-		s.r.unread()
-		s.r.unread()
-
-		// This rune must be followed by a digit or a full stop and a digit.
-		if isDigit(ch1) || (ch1 == '.' && isDigit(ch2)) {
-			_, _ = buf.WriteRune(ch)
-		} else if ch == '+' {
-			return ADD, pos, ""
-		} else if ch == '-' {
-			return SUB, pos, ""
-		}
-	} else if ch == '.' {
-		// Peek and see if the next rune is a digit.
-		ch1, _ := s.r.read()
-		s.r.unread()
-		if !isDigit(ch1) {
-			return ILLEGAL, pos, "."
-		}
-
-		// Unread the full stop so we can read it later.
-		s.r.unread()
-	} else {
-		s.r.unread()
-	}
-
-	// Read as many digits as possible.
+	//get first digit pos
+	_, pos = s.r.read()
+	// push first digit back, then read as many digits as possible.
+	s.r.unread()
 	_, _ = buf.WriteString(s.scanDigits())
 
 	// If next code points are a full stop and digit then consume them.

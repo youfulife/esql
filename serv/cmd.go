@@ -17,12 +17,8 @@ func CmdTranslator(sql string, pretty bool) string {
 	dsl, err := sp.EsDsl(sql)
 	if err != nil {
 		m["err"] = err.Error()
-	}
-
-	js, err := simplejson.NewJson([]byte(dsl))
-	if err != nil {
-		m["err"] = err.Error()
 	} else {
+		js, _ := simplejson.NewJson([]byte(dsl))
 		m["dsl"] = js.MustMap()
 	}
 

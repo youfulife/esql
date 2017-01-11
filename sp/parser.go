@@ -733,6 +733,16 @@ func (p *Parser) parseUnaryExpr() (Expr, error) {
 		return &ParenExpr{Expr: expr}, nil
 	}
 	p.unscan()
+	// negative number is treated as 0-x
+	if tok, _, _ := p.scanIgnoreWhitespace(); tok == SUB {
+		expr, err := p.ParseExpr()
+		if err != nil {
+			return nil, err
+		}
+
+		return &BinaryExpr{LHS: &IntegerLiteral{Val: 0}, RHS: expr, Op: SUB}, nil
+	}
+	p.unscan()
 
 	// Read next token.
 	tok, pos, lit := p.scanIgnoreWhitespace()

@@ -90,9 +90,7 @@ func TestScanner_Scan(t *testing.T) {
 
 		// Numbers
 		{s: `100`, tok: sp.INTEGER, lit: `100`},
-		{s: `+100`, tok: sp.INTEGER, lit: `+100`},
-		{s: `-100`, tok: sp.INTEGER, lit: `-100`},
-		{s: `10.3s`, tok: sp.NUMBER, lit: `10.3`},
+		{s: `10.3`, tok: sp.NUMBER, lit: `10.3`},
 		// Keywords
 		{s: `AS`, tok: sp.AS},
 		{s: `ASC`, tok: sp.ASC},
@@ -200,6 +198,31 @@ func TestScanString(t *testing.T) {
 			t.Errorf("%d. %s: error: exp=%s, got=%s", i, tt.in, tt.err, err)
 		} else if tt.out != out {
 			t.Errorf("%d. %s: out: exp=%s, got=%s", i, tt.in, tt.out, out)
+		}
+	}
+}
+
+// Test scanning number
+func TestScanNumber(t *testing.T) {
+	var tests = []struct {
+		s   string
+		tok sp.Token
+		lit string
+	}{
+		// Numbers
+		{s: `0`, tok: sp.INTEGER, lit: `0`},
+		{s: `000.0000`, tok: sp.NUMBER, lit: `000.0000`},
+		{s: `100`, tok: sp.INTEGER, lit: `100`},
+		{s: `10.3`, tok: sp.NUMBER, lit: `10.3`},
+	}
+
+	for i, tt := range tests {
+		s := sp.NewScanner(strings.NewReader(tt.s))
+		tok, _, lit := s.Scan()
+		if tt.tok != tok {
+			t.Errorf("%d. %q token mismatch: exp=%q got=%q <%q>", i, tt.s, tt.tok, tok, lit)
+		} else if tt.lit != lit {
+			t.Errorf("%d. %q literal mismatch: exp=%q got=%q", i, tt.s, tt.lit, lit)
 		}
 	}
 }

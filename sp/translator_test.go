@@ -275,6 +275,71 @@ func TestTranslator_EsDsl(t *testing.T) {
                     "size": 0
                   }`,
 		},
+		//metric field and group by
+		{
+			sql: `select exchange, count(*) from symbol group by exchange`,
+			dsl: `{
+                    "aggs": {
+                      "exchange": {
+                        "aggs": {},
+                        "terms": {
+                          "field": "exchange",
+                          "size": 0
+                        }
+                      }
+                    },
+                    "query": {
+                      "bool": {
+                        "filter": {
+                          "and": [{"exists": {"field": "exchange"}}]
+                        }
+                      }
+                    },
+                    "size": 0
+                  }`,
+		},
+		//group by groovy function
+		{
+			sql: `SELECT shares_count, COUNT(*) FROM symbol GROUP BY floor(market_cap / last_sale / 1000000) AS shares_count ORDER BY shares_count LIMIT 3`,
+			dsl: `{
+				    "aggs": {
+				      "shares_count": {
+				        "aggs": {},
+				        "terms": {
+				          "order": [
+				            {
+				              "_term": "asc"
+				            }
+				          ],
+				          "script": {
+				            "inline": "floor(doc['market_cap'].value / doc['last_sale'].value / 1000000)",
+				            "lang": "expression"
+				          },
+				          "size": 3
+				        }
+				      }
+				    },
+				    "query": {
+				      "bool": {
+				        "filter": {
+				          "and": [
+				            {
+				              "exists": {
+				                "field": "market_cap"
+				              }
+				            },
+				            {
+				              "exists": {
+				                "field": "last_sale"
+				              }
+				            }
+				          ]
+				        }
+				      }
+				    },
+				    "size": 0
+				  }`,
+		},
 		//histogram aggregation
 		{
 			sql: `select ipo_year_range, count(*) from symbol group by histogram(ipo_year, 5) as ipo_year_range`,
@@ -290,7 +355,42 @@ func TestTranslator_EsDsl(t *testing.T) {
 				      }
 				    },
 					"query": {
-				      "bool": {"filter": {"and": [{"exists": {"field": "ipo_year"}}]}}
+                      "bool": {
+                        "filter": {
+                          "and": [{"exists": {"field": "ipo_year"}}]
+                        }
+                      }
+                    },
+				    "size": 0
+				  }`,
+		},
+		//date histogram aggregation
+		{
+			sql: `select year, max(adj_close) from quote where symbol='AAPL' group by date_histogram('@timestamp','1y') as year`,
+			dsl: `{
+				    "aggs": {
+				      "year": {
+				        "aggs": {
+				          "max(adj_close)": {
+				            "max": {
+				              "field": "adj_close"
+				            }
+				          }
+				        },
+				        "date_histogram": {
+				          "field": "@timestamp",
+				          "interval": "1y"
+				        }
+				      }
+				    },
+				    "query": {
+				      "bool": {
+				        "filter": {
+				          "script": {
+				            "script": "doc['symbol'].value == 'AAPL'"
+				          }
+				        }
+				      }
 				    },
 				    "size": 0
 				  }`,
@@ -682,6 +782,42 @@ func TestTranslator_EsDsl(t *testing.T) {
 				              },
 				              "script": {
 				                "inline": "path0 / path1",
+				                "lang": "expression"
+				              }
+				            }
+				          }
+				        },
+				        "terms": {
+				          "field": "exchange",
+				          "size": 0
+				        }
+				      }
+				    },
+					"query": {
+					  "bool": {"filter": {"and": [{"exists": {"field": "exchange"}}]}}
+					},
+				    "size": 0
+				  }`,
+		},
+		//pipeline aggregation 4
+		{
+			sql: `select  -5*sum(ipo_year+last_sale*2)  AS yyyy from symbol group by exchange`,
+			dsl: `{
+				    "aggs": {
+				      "exchange": {
+				        "aggs": {
+				          "sum(ipo_year + last_sale * 2)": {
+				            "sum": {
+				              "script": "doc['ipo_year'].value + doc['last_sale'].value * 2"
+				            }
+				          },
+				          "yyyy": {
+				            "bucket_script": {
+				              "buckets_path": {
+				                "path0": "sum(ipo_year + last_sale * 2)"
+				              },
+				              "script": {
+				                "inline": "0 - 5 * path0",
 				                "lang": "expression"
 				              }
 				            }
