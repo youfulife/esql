@@ -275,6 +275,61 @@ func TestTranslator_EsDsl(t *testing.T) {
                     "size": 0
                   }`,
 		},
+		//histogram aggregation
+		{
+			sql: `select ipo_year_range, count(*) from symbol group by histogram(ipo_year, 5) as ipo_year_range`,
+			dsl: `{
+				    "aggs": {
+				      "ipo_year_range": {
+				        "aggs": {},
+				        "histogram": {
+				          "field": "ipo_year",
+				          "interval": "5",
+				          "min_doc_count": 0
+				        }
+				      }
+				    },
+					"query": {
+				      "bool": {"filter": {"and": [{"exists": {"field": "ipo_year"}}]}}
+				    },
+				    "size": 0
+				  }`,
+		},
+		//range aggregation
+		{
+			sql: `SELECT ipo_year_range, COUNT(*) FROM symbol GROUP BY range(ipo_year, 1980, 1990, 2000) AS ipo_year_range`,
+			dsl: `{
+				    "aggs": {
+				      "ipo_year_range": {
+				        "aggs": {},
+				        "range": {
+				          "field": "ipo_year",
+				          "keyed": true,
+				          "ranges": [
+				            {
+				              "to": "1980"
+				            },
+				            {
+				              "from": "1980",
+				              "to": "1990"
+				            },
+				            {
+				              "from": "1990",
+				              "to": "2000"
+				            },
+				            {
+				              "from": "2000"
+				            }
+				          ]
+				        }
+				      }
+				    },
+					"query": {
+				      "bool": {"filter": {"and": [{"exists": {"field": "ipo_year"}}]}}
+				    },
+				    "size": 0
+				  }`,
+		},
 		//metric field and group by
 		{
 			sql: `select exchange, max(market_cap) from symbol group by exchange`,
