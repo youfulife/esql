@@ -325,6 +325,189 @@ func TestTranslator_EsDsl(t *testing.T) {
                     "size": 0
                   }`,
 		},
+		//metric(field op field) and group by multi field
+		{
+			sql: `select exchange, sum(ipo_year+last_sale) from symbol group by exchange`,
+			dsl: `{
+				    "aggs": {
+				      "exchange": {
+				        "aggs": {
+				          "sum(ipo_year + last_sale)": {"sum": {"script": "doc['ipo_year'].value + doc['last_sale'].value"}}
+				        },
+				        "terms": {"field": "exchange","size": 0}
+				      }
+				    },
+				    "query": {
+				      "bool": {"filter": {"and": [{"exists": {"field": "exchange"}}]}}
+				    },
+				    "size": 0
+				  }`,
+		},
+		//metric field and group by field expr
+		{
+			sql: `SELECT ipo_year_rem, COUNT(*) FROM symbol GROUP BY ipo_year % 5 AS ipo_year_rem`,
+			dsl: `{
+				    "aggs": {
+				      "ipo_year_rem": {
+				        "aggs": {},
+				        "terms": {
+				          "script": "doc['ipo_year'].value % 5",
+				          "size": 0
+				        }
+				      }
+				    },
+					"query": {
+				      "bool": {"filter": {"and": [{"exists": {"field": "ipo_year"}}]}}
+				    },
+				    "size": 0
+				  }`,
+		},
+		//order by _term
+		{
+			sql: `SELECT ipo_year, COUNT(*) FROM symbol GROUP BY ipo_year ORDER BY ipo_year LIMIT 3`,
+			dsl: `{
+				    "aggs": {
+				      "ipo_year": {
+				        "aggs": {},
+				        "terms": {
+				          "field": "ipo_year",
+				          "order": [
+				            {
+				              "_term": "asc"
+				            }
+				          ],
+				          "size": 3
+				        }
+				      }
+				    },
+					"query": {
+				      "bool": {"filter": {"and": [{"exists": {"field": "ipo_year"}}]}}
+				    },
+				    "size": 0
+				  }`,
+		},
+		//order by _count
+		{
+			sql: `SELECT ipo_year, COUNT(*) AS ipo_count FROM symbol GROUP BY ipo_year ORDER BY ipo_count LIMIT 2`,
+			dsl: `{
+				    "aggs": {
+				      "ipo_year": {
+				        "aggs": {},
+				        "terms": {
+				          "field": "ipo_year",
+				          "order": [
+				            {
+				              "_count": "asc"
+				            }
+				          ],
+				          "size": 2
+				        }
+				      }
+				    },
+					"query": {
+				      "bool": {"filter": {"and": [{"exists": {"field": "ipo_year"}}]}}
+				    },
+				    "size": 0
+				  }`,
+		},
+		//order by metric
+		{
+			sql: `SELECT ipo_year, MAX(market_cap) AS max_market_cap FROM symbol GROUP BY ipo_year ORDER BY max_market_cap LIMIT 2`,
+			dsl: `{
+				    "aggs": {
+				      "ipo_year": {
+				        "aggs": {
+				          "max_market_cap": {
+				            "max": {
+				              "field": "market_cap"
+				            }
+				          }
+				        },
+				        "terms": {
+				          "field": "ipo_year",
+				          "order": [
+				            {
+				              "max_market_cap": "asc"
+				            }
+				          ],
+				          "size": 2
+				        }
+				      }
+				    },
+					"query": {
+				      "bool": {"filter": {"and": [{"exists": {"field": "ipo_year"}}]}}
+				    },
+				    "size": 0
+				  }`,
+		},
+		//having
+		{
+			sql: `SELECT ipo_year, COUNT(*) AS ipo_count FROM symbol GROUP BY ipo_year HAVING ipo_count > 200`,
+			dsl: `{
+				    "aggs": {
+				      "ipo_year": {
+				        "aggs": {
+				          "having": {
+				            "bucket_selector": {
+				              "buckets_path": {
+				                "ipo_count": "_count"
+				              },
+				              "script": {
+				                "inline": "ipo_count \u003e 200",
+				                "lang": "expression"
+				              }
+				            }
+				          }
+				        },
+				        "terms": {
+				          "field": "ipo_year",
+				          "size": 0
+				        }
+				      }
+				    },
+					"query": {
+					  "bool": {"filter": {"and": [{"exists": {"field": "ipo_year"}}]}}
+					},
+				    "size": 0
+				  }`,
+		},
+		//having2
+		{
+			sql: `SELECT ipo_year, COUNT(*) AS ipo_count, MAX(last_sale) AS max_last_sale FROM symbol GROUP BY ipo_year HAVING ipo_count > 100 AND max_last_sale <= 10000`,
+			dsl: `{
+				    "aggs": {
+				      "ipo_year": {
+				        "aggs": {
+				          "having": {
+				            "bucket_selector": {
+				              "buckets_path": {
+				                "ipo_count": "_count",
+				                "max_last_sale": "max_last_sale"
+				              },
+				              "script": {
+				                "inline": "ipo_count > 100 && max_last_sale <= 10000",
+				                "lang": "expression"
+				              }
+				            }
+				          },
+				          "max_last_sale": {
+				            "max": {
+				              "field": "last_sale"
+				            }
+				          }
+				        },
+				        "terms": {
+				          "field": "ipo_year",
+				          "size": 0
+				        }
+				      }
+				    },
+					"query": {
+					  "bool": {"filter": {"and": [{"exists": {"field": "ipo_year"}}]}}
+					},
+				    "size": 0
+				  }`,
+		},
 	}
 	for i, tt := range tests {
 		dsl, err := sp.EsDsl(tt.sql)

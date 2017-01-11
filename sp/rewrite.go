@@ -149,3 +149,37 @@ func (c *Call) RewriteMetricArgs() {
 		WalkFunc(arg, rewrite)
 	}
 }
+
+//RewriteDimensions ...
+func (s *SelectStatement) RewriteDimensions() {
+
+	// Rewrite all variable references
+	rewrite := func(n Node) {
+		switch expr := n.(type) {
+		case *VarRef:
+			expr.Val = expr.GroovyWrapped()
+		}
+		return
+	}
+	for _, d := range s.Dimensions {
+		// only rewrite BinaryExpr, not support ParenExpr
+		_, ok := d.Expr.(*BinaryExpr)
+		if ok {
+			WalkFunc(d, rewrite)
+		}
+	}
+}
+
+//RewriteHaving ...
+func (s *SelectStatement) RewriteHaving() {
+	// Rewrite all variable references in the fields with their types if one
+	// hasn't been specified.
+	rewrite := func(n Node) {
+		switch expr := n.(type) {
+		case *BinaryExpr:
+			tokens[expr.Op] = expr.Op.GroovyWrapped()
+		}
+		return
+	}
+	WalkFunc(s.Having, rewrite)
+}

@@ -100,12 +100,14 @@ var aggs = [...]string{
 	BucketSelector: "bucket_selector",
 }
 
+// Agg .
 type Agg struct {
 	name   string
 	typ    ESAgg
 	params map[string]interface{}
 }
 
+//Aggs .
 type Aggs []*Agg
 
 func (s *SelectStatement) isGroupBySort(f string) bool {
@@ -263,6 +265,7 @@ func (s *SelectStatement) BucketSelectorAggregation() *Agg {
 	if s.Having == nil {
 		return nil
 	}
+	s.RewriteHaving()
 	// fieldAsNames := s.Fields.AliasNames()
 	havingNames := s.NamesInHaving()
 	agg := &Agg{}
@@ -288,6 +291,7 @@ func (s *SelectStatement) BucketSelectorAggregation() *Agg {
 
 func (s *SelectStatement) bucketAggregations() Aggs {
 	var aggs Aggs
+	s.RewriteDimensions()
 	for _, dim := range s.Dimensions {
 		agg := &Agg{}
 		agg.params = make(map[string]interface{})

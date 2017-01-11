@@ -60,15 +60,11 @@ Usage of ./esql:
 "select year, max(adj_close) from quote where symbol='AAPL' group by date_histogram('@timestamp','1y') as year"
 "select ipo_year_range, count(*) from symbol group by histogram(ipo_year, 5) as ipo_year_range"
 "SELECT ipo_year_range, COUNT(*) FROM symbol GROUP BY range(ipo_year, 2000) AS ipo_year_range"
-"SELECT ipo_year, COUNT(*) FROM symbol GROUP BY ipo_year ORDER BY ipo_year LIMIT 3"
-"SELECT ipo_year, COUNT(*) AS ipo_count FROM symbol GROUP BY ipo_year ORDER BY ipo_count LIMIT 2"
-"SELECT ipo_year, MAX(market_cap) AS max_market_cap FROM symbol GROUP BY ipo_year ORDER BY max_market_cap LIMIT 2"
-"SELECT ipo_year_rem, COUNT(*) FROM symbol GROUP BY ipo_year % 5 AS ipo_year_rem"
+
 "SELECT shares_count, COUNT(*) FROM symbol GROUP BY floor(market_cap / last_sale / 1000000)  AS shares_count ORDER BY shares_count LIMIT 3"
-"SELECT ipo_year, COUNT(*) AS ipo_count FROM symbol GROUP BY ipo_year HAVING ipo_count > 200"
-"SELECT ipo_year, COUNT(*) AS ipo_count, MAX(last_sale) AS max_last_sale FROM symbol GROUP BY ipo_year HAVING ipo_count > 100 AND max_last_sale <= 10000"
-"select exchange, sum(ipo_year+last_sale) from symbol group by exchange"
-"select exchange, sum(ipo_year), sum(ipo_year)/sum(last_sale) AS yyyy from symbol group by exchange"
+
+
+
 "select exchange, sum(ipo_year), sum(ipo_year*2)/sum(last_sale) AS yyyy from symbol group by exchange"
 "select exchange, sum(ipo_year), sum(ipo_year+last_sale)/sum(last_sale) AS yyyy from symbol group by exchange"
 
