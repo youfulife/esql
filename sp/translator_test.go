@@ -508,6 +508,142 @@ func TestTranslator_EsDsl(t *testing.T) {
 				    "size": 0
 				  }`,
 		},
+		//pipeline aggregation
+		{
+			sql: `select exchange, sum(ipo_year), sum(ipo_year)/sum(last_sale) AS yyyy from symbol group by exchange`,
+			dsl: `{
+				    "aggs": {
+				      "exchange": {
+				        "aggs": {
+				          "sum(ipo_year)": {
+				            "sum": {
+				              "field": "ipo_year"
+				            }
+				          },
+				          "sum(last_sale)": {
+				            "sum": {
+				              "field": "last_sale"
+				            }
+				          },
+				          "yyyy": {
+				            "bucket_script": {
+				              "buckets_path": {
+				                "path0": "sum(ipo_year)",
+				                "path1": "sum(last_sale)"
+				              },
+				              "script": {
+				                "inline": "path0 / path1",
+				                "lang": "expression"
+				              }
+				            }
+				          }
+				        },
+				        "terms": {
+				          "field": "exchange",
+				          "size": 0
+				        }
+				      }
+				    },
+					"query": {
+					  "bool": {"filter": {"and": [{"exists": {"field": "exchange"}}]}}
+					},
+				    "size": 0
+				  }`,
+		},
+		//pipeline aggregation2
+		{
+			sql: `select exchange, sum(ipo_year), sum(ipo_year*2)/avg(last_sale) AS yyyy from symbol group by exchange`,
+			dsl: `{
+				    "aggs": {
+				      "exchange": {
+				        "aggs": {
+				          "avg(last_sale)": {
+				            "avg": {
+				              "field": "last_sale"
+				            }
+				          },
+				          "sum(ipo_year * 2)": {
+				            "sum": {
+				              "script": "doc['ipo_year'].value * 2"
+				            }
+				          },
+				          "sum(ipo_year)": {
+				            "sum": {
+				              "field": "ipo_year"
+				            }
+				          },
+				          "yyyy": {
+				            "bucket_script": {
+				              "buckets_path": {
+				                "path0": "sum(ipo_year * 2)",
+				                "path1": "avg(last_sale)"
+				              },
+				              "script": {
+				                "inline": "path0 / path1",
+				                "lang": "expression"
+				              }
+				            }
+				          }
+				        },
+				        "terms": {
+				          "field": "exchange",
+				          "size": 0
+				        }
+				      }
+				    },
+					"query": {
+					  "bool": {"filter": {"and": [{"exists": {"field": "exchange"}}]}}
+					},
+				    "size": 0
+				  }`,
+		},
+		//pipeline aggregation 3
+		{
+			sql: `select exchange, sum(ipo_year), sum(ipo_year+last_sale)/sum(last_sale) AS yyyy from symbol group by exchange`,
+			dsl: `{
+				    "aggs": {
+				      "exchange": {
+				        "aggs": {
+				          "sum(ipo_year + last_sale)": {
+				            "sum": {
+				              "script": "doc['ipo_year'].value + doc['last_sale'].value"
+				            }
+				          },
+				          "sum(ipo_year)": {
+				            "sum": {
+				              "field": "ipo_year"
+				            }
+				          },
+				          "sum(last_sale)": {
+				            "sum": {
+				              "field": "last_sale"
+				            }
+				          },
+				          "yyyy": {
+				            "bucket_script": {
+				              "buckets_path": {
+				                "path0": "sum(ipo_year + last_sale)",
+				                "path1": "sum(last_sale)"
+				              },
+				              "script": {
+				                "inline": "path0 / path1",
+				                "lang": "expression"
+				              }
+				            }
+				          }
+				        },
+				        "terms": {
+				          "field": "exchange",
+				          "size": 0
+				        }
+				      }
+				    },
+					"query": {
+					  "bool": {"filter": {"and": [{"exists": {"field": "exchange"}}]}}
+					},
+				    "size": 0
+				  }`,
+		},
 	}
 	for i, tt := range tests {
 		dsl, err := sp.EsDsl(tt.sql)

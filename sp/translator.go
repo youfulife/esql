@@ -410,15 +410,11 @@ func (s *SelectStatement) bucketScriptAggs() Aggs {
 
 		for i, fn := range calls {
 			agg := &Agg{}
-			agg.params = make(map[string]interface{})
+
+			agg.typ = fn.metricAggType()
+			agg.params = fn.metricAggParams()
 			agg.name = fmt.Sprintf(`%s(%s)`, fn.Name, cleanDocString(fn.Args[0].String()))
-			switch fn.Name {
-			case "sum":
-				agg.typ = Sum
-				agg.params["script"] = fn.Args[0].String()
-			default:
-				panic(fmt.Errorf("not support agg aggregation"))
-			}
+
 			path := fmt.Sprintf("path%d", i)
 			bucketsPath[path] = agg.name
 			//todo: ugly, should use walk tree method

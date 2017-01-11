@@ -63,11 +63,6 @@ Usage of ./esql:
 
 "SELECT shares_count, COUNT(*) FROM symbol GROUP BY floor(market_cap / last_sale / 1000000)  AS shares_count ORDER BY shares_count LIMIT 3"
 
-
-
-"select exchange, sum(ipo_year), sum(ipo_year*2)/sum(last_sale) AS yyyy from symbol group by exchange"
-"select exchange, sum(ipo_year), sum(ipo_year+last_sale)/sum(last_sale) AS yyyy from symbol group by exchange"
-
 //filter aggregation
 "select sum(market_cap, "exchange=='nyse'") from symbol where ipo_year=1998"
 "select * from symbol WHERE symbol LIKE 'AAP%'"
